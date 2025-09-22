@@ -1,0 +1,4 @@
+- Scanning
+- Parsing
+- Static analysis
+- 

@@ -1,0 +1,1 @@
+Because of the nature of connections (Directional, no cycles). The Graph is a directed acyclic graph
