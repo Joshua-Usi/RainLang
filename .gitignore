@@ -1,1 +1,6 @@
 /notes/.obsidian
+/.obsidian
+/test-files
+/grammars
+grammar_play.py
+run_test_suite.py
