@@ -25,9 +25,6 @@ public enum TokenType {
 	FUNCTION, RETURN,
 	CLASS, SUPER, THIS,
 
-	// Primitive types
-	TYPE,
-
 	// Literals
 	NUMBER, STRING, IDENTIFIER,
 

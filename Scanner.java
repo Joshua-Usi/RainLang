@@ -1,5 +1,14 @@
 import java.util.*;
 
+class Tuple<X, Y> { 
+	public final X x; 
+	public final Y y; 
+	public Tuple(X x, Y y) { 
+		this.x = x; 
+		this.y = y; 
+	}
+} 
+
 public class Scanner {
 	private final String source;
 	private final List<Token> tokens = new ArrayList<Token>();
@@ -24,13 +33,6 @@ public class Scanner {
 		keywords.put("class", TokenType.CLASS);
 		keywords.put("super", TokenType.SUPER);
 		keywords.put("this", TokenType.THIS);
-		// Types
-		keywords.put("Val", TokenType.TYPE);
-		keywords.put("Body", TokenType.TYPE);
-		keywords.put("Volume", TokenType.TYPE);
-		keywords.put("Area", TokenType.TYPE);
-		keywords.put("Rain", TokenType.TYPE);
-		keywords.put("String", TokenType.TYPE);
 	}
 
 	public Scanner(String source) {
@@ -172,9 +174,9 @@ public class Scanner {
 		while (isAlphaNumeric(peek())) advance();
 		String text = source.substring(start, current);
 		// Check if it's a keyword
-	    TokenType type = keywords.get(text);
-	    // If not, it's an identifer
-	    if (type == null) type = TokenType.IDENTIFIER;
-	    addToken(type);
+		TokenType type = keywords.get(text);
+		// If not, it's an identifer
+		if (type == null) type = TokenType.IDENTIFIER;
+		addToken(type);
 	}
 }
