@@ -14,7 +14,7 @@ public class Token {
 		this.column = column;
 	}
 
-	  public String toString() {
+	public String toString() {
 		return type + " " + lexeme + ((literal == null) ? "" : " " + literal);
-	  }
+	}
 }

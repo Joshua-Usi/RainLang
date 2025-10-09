@@ -15,9 +15,13 @@ A body is the fundamental node unit for RainLang. A body is defined as a surface
 ```java
 // Define a body with an area of 10m2 and 30L of initial water
 Body a = Body(10m2, 30L);
-// Bodies have a few properties that can be accessed
-println(a.volume); // Prints 30L
-println(a.area); // prints 10m2
+
+println(a.volume);   // 30L
+println(a.area);     // 10m2
+println(a.sources);  // []
+println(a.sinks);    // []
+println(a.inflows);  // []
+println(a.outflows); // []
 ```
 ## Volume
 Volume is a representation of water in Litres with the literal `L`. When talking about bodies of water in real systems, the usage of just the literal `L` may cause issues with needing excessively large numbers. To resolve this, SI prefixes can be added to the literal to improve readability.
@@ -141,13 +145,13 @@ Adding, subtracting, multiplying and dividing numbers in different ways can lead
 | Strings    | ❌   | ❌    | ❌        | ❌          | ❌          | ❌      | ❌       |
 
 | / Divide | Val | Body | Volume | Area | Rain | Arrays | Strings |
-| -------- | --- | ---- | -------- | ---- | ---- | ------ | ------- |
-| Val      | ✅   | ❌    | ❌        | ❌    | ❌    | ❌      | ❌       |
-| Body     | ❌   | ❌    | ❌        | ❌    | ❌    | ❌      | ❌       |
-| Volume | ✅   | ❌    | ❌        | ❌    | ❌    | ❌      | ❌       |
-| Area     | ✅   | ❌    | ✅ Rain   | ❌    | ❌    | ❌      | ❌       |
-| Rain     | ✅   | ❌    | ✅ Area   | ❌    | ❌    | ❌      | ❌       |
-| Arrays   | ❌   | ❌    | ❌        | ❌    | ❌    | ❌      | ❌       |
-| Strings  | ❌   | ❌    | ❌        | ❌    | ❌    | ❌      | ❌       |
+| -------- | --- | ---- | ------ | ---- | ---- | ------ | ------- |
+| Val      | ✅   | ❌    | ❌      | ❌    | ❌    | ❌      | ❌       |
+| Body     | ❌   | ❌    | ❌      | ❌    | ❌    | ❌      | ❌       |
+| Volume   | ✅   | ❌    | ❌      | ❌    | ❌    | ❌      | ❌       |
+| Area     | ✅   | ❌    | ✅ Rain | ❌    | ❌    | ❌      | ❌       |
+| Rain     | ✅   | ❌    | ✅ Area | ❌    | ❌    | ❌      | ❌       |
+| Arrays   | ❌   | ❌    | ❌      | ❌    | ❌    | ❌      | ❌       |
+| Strings  | ❌   | ❌    | ❌      | ❌    | ❌    | ❌      | ❌       |
 # Booleans
 Booleans are a special type as they are only compatible with logical operators (`<, <=, ==, !=, >, >=`) and binary operators (`&&, ||, !`) on themselves. I'm sure you know how bools work so I CBF to write out how they work

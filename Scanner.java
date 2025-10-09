@@ -21,18 +21,19 @@ public class Scanner {
 	static {
 		// Boolean keywords
 		keywords.put("true", TokenType.TRUE);
-		keywords.put("false", TokenType.TRUE);
+		keywords.put("false", TokenType.FALSE);
 		// Control flow keywords
 		keywords.put("if", TokenType.IF);
 		keywords.put("else", TokenType.ELSE);
 		keywords.put("while", TokenType.WHILE);
 		keywords.put("for", TokenType.FOR);
 		// High level concepts
-		keywords.put("func", TokenType.FUNCTION);
 		keywords.put("return", TokenType.RETURN);
 		keywords.put("class", TokenType.CLASS);
 		keywords.put("super", TokenType.SUPER);
 		keywords.put("this", TokenType.THIS);
+		// None
+		keywords.put("None", TokenType.NONE);
 	}
 
 	public Scanner(String source) {
@@ -77,6 +78,9 @@ public class Scanner {
 				}
 				break;
 			}
+			// Logical operators
+			case '&': if (match('&')) { addToken(TokenType.AND_AND); break; }
+			case '|': if (match('|')) { addToken(TokenType.OR_OR); break; }
 			// Comparison operators
 			case '!': addToken(match('=') ? TokenType.BANG_EQUAL    : TokenType.BANG); break;
 			case '=': addToken(match('=') ? TokenType.EQUAL_EQUAL   : TokenType.EQUAL); break;

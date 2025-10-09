@@ -22,11 +22,11 @@ public enum TokenType {
 	AND_AND, OR_OR,
 
 	// High-level concepts
-	FUNCTION, RETURN,
+	RETURN,
 	CLASS, SUPER, THIS,
 
 	// Literals
-	NUMBER, STRING, IDENTIFIER,
+	NUMBER, STRING, IDENTIFIER, NONE,
 
 	EOF
 }

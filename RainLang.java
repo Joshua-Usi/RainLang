@@ -42,10 +42,11 @@ public class RainLang {
 	private static void run(String source) {
 		Scanner scanner = new Scanner(source);
 		List<Token> tokens = scanner.tokenise();
-
-		for (Token token : tokens) {
-			System.out.println(token);
-		}
+		// for (Token token : tokens) System.out.println(token);
+		Parser parser = new Parser(tokens);
+		List<Stmt> program = parser.parse();
+		AstPrinter p = new AstPrinter();
+		System.out.println(p.printStmts(program));
 	}
 	public static void error(int line, String message) {
 		report(line, "", message);

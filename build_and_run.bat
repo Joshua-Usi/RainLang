@@ -1,5 +1,3 @@
 @echo off
-call clean.bat
-echo Compiling solution
-javac *.java
+call build.bat
 java RainLang
