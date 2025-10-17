@@ -98,7 +98,7 @@ public class Scanner {
 			default:
 				if (isDigit(c)) {
 					handleNumber();
-				} else if (isAlpha(c)) {
+				} else if (isAlpha(c) || c == '%') {
 					handleIdentifier();
 				} else {	
 					RainLang.error(line, "Unexpected character \"" + c + "\"");
@@ -144,7 +144,8 @@ public class Scanner {
 		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 	}
 	private static boolean isAlphaNumeric(char c) {
-		return isAlpha(c) || isDigit(c);
+		// Fuck it, this lets us define variables with percent signs in them, but yolo
+		return isAlpha(c) || isDigit(c) || c == '%';
 	}
 	private void handleString() {
 		while (peek() != '\"' && !isAtEnd()) {

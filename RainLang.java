@@ -6,6 +6,7 @@ import java.util.*;
 public class RainLang {
 	public static final int ERR_INVALID_USAGE = 64;
 	public static final int ERR_SOURCE_CODE_ERROR = 65;
+	private static final Interpreter interpreter = new Interpreter();
 	
 	private static int errors = 0;
 	
@@ -42,11 +43,18 @@ public class RainLang {
 	private static void run(String source) {
 		Scanner scanner = new Scanner(source);
 		List<Token> tokens = scanner.tokenise();
+		// For debugging lexer 
 		// for (Token token : tokens) System.out.println(token);
+		
 		Parser parser = new Parser(tokens);
 		List<Stmt> program = parser.parse();
+		// For debugging parser
 		AstPrinter p = new AstPrinter();
-		System.out.println(p.printStmts(program));
+		// System.out.println(p.printStmts(program));
+		// If parsing fails, assume program is unrunnable
+		if (errors > 0) return;
+		
+		interpreter.interpret(program);
 	}
 	public static void error(int line, String message) {
 		report(line, "", message);
