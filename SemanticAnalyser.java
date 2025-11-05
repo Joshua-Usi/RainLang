@@ -6,6 +6,20 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	private final Deque<Type> classStack = new ArrayDeque<>();
 	private boolean firstEnter = true;
 
+	// member typing registry
+	private static final class FnSig {
+		final Type ret; final List<Type> params;
+		FnSig(Type ret, List<Type> params) { this.ret = ret; this.params = params; }
+	}
+	private static final class ClassInfo {
+		final String name;
+		final Map<String, Type> fields = new HashMap<>();
+		final Map<String, FnSig> methods = new HashMap<>();
+		FnSig ctor = null;
+		ClassInfo(String name) { this.name = name; }
+	}
+	private final Map<String, ClassInfo> classes = new HashMap<>();
+
 	void analyse(List<Stmt> program) {
 		if (firstEnter) {
 			Builtins.registerTypes(env);
@@ -35,22 +49,30 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Void visitFunctionStmt(Stmt.Function stmt) {
-		// Register name (calls are dynamically typed here)
-		env.define(stmt.name.lexeme, Type.unknown());
+		// compute and register function type
+		Type retType = resolveTypeNode(stmt.returnType);
+		List<Type> paramTypes = new ArrayList<>(stmt.params.size());
+		for (Stmt.Param p : stmt.params) paramTypes.add(resolveTypeNode(p.type));
+		Type fnType = Type.function(retType, paramTypes);
+		env.define(stmt.name.lexeme, fnType);
 
 		// New scope for params/body
 		env.push();
-		Type retType = resolveTypeNode(stmt.returnType);
 		returnStack.push(retType);
-		// Params
-		for (Stmt.Param p : stmt.params) {
-			Type pt = resolveTypeNode(p.type);
-			env.define(p.name.lexeme, pt);
+		for (int i = 0; i < stmt.params.size(); i++) {
+			Stmt.Param p = stmt.params.get(i);
+			env.define(p.name.lexeme, paramTypes.get(i));
 		}
-		// Body
 		for (Stmt s : stmt.body) visit(s);
 		returnStack.pop();
 		env.pop();
+
+		// also record as a method if inside a class
+		if (!classStack.isEmpty()) {
+			String cname = classStack.peek().name;
+			ClassInfo ci = classes.get(cname);
+			if (ci != null) ci.methods.put(stmt.name.lexeme, new FnSig(retType, paramTypes));
+		}
 		return null;
 	}
 
@@ -58,6 +80,9 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	public Void visitClassStmt(Stmt.ClassStmt stmt) {
 		Type cls = Type.classType(stmt.name.lexeme);
 		env.define(stmt.name.lexeme, cls);
+
+		// register class shell so members can be recorded
+		classes.put(stmt.name.lexeme, new ClassInfo(stmt.name.lexeme));
 
 		// Class scope for fields/methods
 		classStack.push(cls);
@@ -127,6 +152,13 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	@Override
 	public Void visitFieldStmt(Stmt.Field stmt) {
 		Type declared = resolveTypeNode(stmt.type);
+
+		// record field type on current class
+		if (!classStack.isEmpty()) {
+			ClassInfo ci = classes.get(classStack.peek().name);
+			if (ci != null) ci.fields.put(stmt.name.lexeme, declared);
+		}
+
 		if (stmt.initializer != null) {
 			Type init = visit(stmt.initializer);
 			if (!isAssignable(init, declared)) {
@@ -141,6 +173,17 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Void visitConstructorStmt(Stmt.Constructor stmt) {
+		// record constructor signature
+		if (!classStack.isEmpty()) {
+			String cname = classStack.peek().name;
+			ClassInfo ci = classes.get(cname);
+			if (ci != null) {
+				List<Type> paramTypes = new ArrayList<>(stmt.params.size());
+				for (Stmt.Param p : stmt.params) paramTypes.add(resolveTypeNode(p.type));
+				ci.ctor = new FnSig(Type.classType(cname), paramTypes);
+			}
+		}
+
 		// New scope for params/body (inside class)
 		env.push();
 		for (Stmt.Param p : stmt.params) {
@@ -242,22 +285,132 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Type visitCallExpr(Expr.Call expr) {
-		// Dynamically typed calls; validate args only
+		if (expr.callee instanceof Expr.Get) {
+			Expr.Get g = (Expr.Get) expr.callee;
+			Type recv = visit(g.object);
+
+			// Collect argument types
+			List<Type> argTypes = new ArrayList<>(expr.arguments.size());
+			for (Expr a : expr.arguments) argTypes.add(visit(a));
+
+			if (recv.kind == Type.Kind.ARRAY) {
+				FnSig sig = arrayMethodSig(g.name.lexeme, recv.element);
+				if (sig == null) {
+					RainLang.error(g.name.line, "Unknown array method '" + g.name.lexeme + "'.");
+					return Type.unknown();
+				}
+				if (sig.params.size() != argTypes.size()) {
+					RainLang.error(g.name.line, "Expected " + sig.params.size() + " arguments but got " + argTypes.size() + ".");
+				} else {
+					for (int i = 0; i < sig.params.size(); i++) {
+						if (!isAssignable(argTypes.get(i), sig.params.get(i))) {
+							RainLang.error(getLine(expr.arguments.get(i)),
+								"Argument " + (i + 1) + " to '" + g.name.lexeme + "' must be " + sig.params.get(i) + " but got " + argTypes.get(i) + ".");
+						}
+					}
+				}
+				return sig.ret;
+			}
+
+			if (recv.equals(Type.string())) {
+				FnSig sig = stringMethodSig(g.name.lexeme);
+				if (sig == null) {
+					RainLang.error(g.name.line, "Unknown String method '" + g.name.lexeme + "'.");
+					return Type.unknown();
+				}
+				if (sig.params.size() != argTypes.size()) {
+					RainLang.error(g.name.line, "Expected " + sig.params.size() + " arguments but got " + argTypes.size() + ".");
+				} else {
+					for (int i = 0; i < sig.params.size(); i++) {
+						if (!isAssignable(argTypes.get(i), sig.params.get(i))) {
+							RainLang.error(getLine(expr.arguments.get(i)),
+								"Argument " + (i + 1) + " to '" + g.name.lexeme + "' must be " + sig.params.get(i) + " but got " + argTypes.get(i) + ".");
+						}
+					}
+				}
+				return sig.ret;
+			}
+		}
+
+		// Fallback: dynamic/unknown callee; still visit args
 		for (Expr a : expr.arguments) visit(a);
 		return Type.unknown();
 	}
 
+
 	@Override
 	public Type visitGetExpr(Expr.Get expr) {
-		visit(expr.object);
+		Type recv = visit(expr.object);
+
+		// Array built-ins
+		if (recv.kind == Type.Kind.ARRAY) {
+			String m = expr.name.lexeme;
+			if ("length".equals(m)) return Type.val();
+			FnSig sig = arrayMethodSig(m, recv.element);
+			if (sig != null) return Type.function(sig.ret, sig.params);
+			RainLang.error(expr.name.line, "Unknown member '" + m + "' on array of " + recv.element + ".");
+			return Type.unknown();
+		}
+
+		// String built-ins
+		if (recv.equals(Type.string())) {
+			String m = expr.name.lexeme;
+			if ("length".equals(m)) return Type.val();
+			FnSig sig = stringMethodSig(m);
+			if (sig != null) return Type.function(sig.ret, sig.params);
+			RainLang.error(expr.name.line, "Unknown member '" + m + "' on String.");
+			return Type.unknown();
+		}
+
+		// Class members (existing logic)
+		if (recv.kind != Type.Kind.CLASS) {
+			RainLang.error(getLine(expr.object), "Property access requires a class instance, array, or string; got " + recv + ".");
+			return Type.unknown();
+		}
+		ClassInfo ci = classes.get(recv.name);
+		if (ci == null) {
+			RainLang.error(getLine(expr.object), "Unknown class '" + recv.name + "'.");
+			return Type.unknown();
+		}
+		Type f = ci.fields.get(expr.name.lexeme);
+		if (f != null) return f;
+		FnSig m = ci.methods.get(expr.name.lexeme);
+		if (m != null) return Type.function(m.ret, m.params);
+
+		RainLang.error(expr.name.line, "Unknown member '" + expr.name.lexeme + "' on class " + recv.name + ".");
 		return Type.unknown();
 	}
 
 	@Override
 	public Type visitSetExpr(Expr.Set expr) {
-		visit(expr.object);
+		Type recv = visit(expr.object);
+		if (recv.kind != Type.Kind.CLASS) {
+			RainLang.error(getLine(expr.object), "Field assignment requires a class instance, got " + recv + ".");
+			visit(expr.value);
+			return Type.unknown();
+		}
+		ClassInfo ci = classes.get(recv.name);
+		if (ci == null) {
+			RainLang.error(getLine(expr.object), "Unknown class '" + recv.name + "'.");
+			visit(expr.value);
+			return Type.unknown();
+		}
+		if (ci.methods.containsKey(expr.name.lexeme)) {
+			RainLang.error(expr.name.line, "Cannot assign to method '" + expr.name.lexeme + "'.");
+			visit(expr.value);
+			return Type.unknown();
+		}
+		Type fieldT = ci.fields.get(expr.name.lexeme);
+		if (fieldT == null) {
+			RainLang.error(expr.name.line, "Unknown field '" + expr.name.lexeme + "' on class " + recv.name + ".");
+			visit(expr.value);
+			return Type.unknown();
+		}
 		Type v = visit(expr.value);
-		return v;
+		if (!isAssignable(v, fieldT)) {
+			RainLang.error(getLine(expr.value), "Cannot assign " + v + " to field '" + expr.name.lexeme + "' of type " + fieldT + ".");
+		}
+		return fieldT;
 	}
 
 	@Override
@@ -445,6 +598,24 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 				return Type.unknown();
 		}
 	}
+
+	// Add helpers inside SemanticAnalyser
+	private FnSig arrayMethodSig(String name, Type elem) {
+		switch (name) {
+			case "push":     return new FnSig(Type.val(), Arrays.asList(elem));
+			case "pop":      return new FnSig(elem,      Collections.emptyList());
+			case "clear":    return new FnSig(Type.none(), Collections.emptyList());
+			case "insert":   return new FnSig(Type.none(), Arrays.asList(Type.val(), elem));
+			case "removeAt": return new FnSig(elem,      Arrays.asList(Type.val()));
+			default:         return null;
+		}
+	}
+
+	private FnSig stringMethodSig(String name) {
+		// For later in case we ever add some more properties
+		return null;
+	}
+
 
 	// Overloads are fun
 	private Type visit(Expr e) { return e.accept(this); }

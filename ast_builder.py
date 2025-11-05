@@ -11,8 +11,8 @@ TYPES = [
     "Call        : Expr callee, Token paren, List<Expr> arguments",
     "Get         : Expr object, Token name",               # obj.name
     "Set         : Expr object, Token name, Expr value",   # obj.name = value
-    "Index       : Expr array, Expr index",                # arr[expr]
-    "IndexSet    : Expr array, Expr index, Expr value",    # arr[expr] = value
+    "Index       : Expr array, Expr index, Token bracket",               # arr[expr]
+    "IndexSet    : Expr array, Expr index, Expr value, Token bracket",    # arr[expr] = value
     "Array       : List<Expr> elements",
     "This        : Token keyword"
 ]

@@ -9,6 +9,13 @@ class RainFunction implements Callable {
 		this.closure = closure;
 	}
 
+	// For classes
+	RainFunction bind(RainInstance instance) {
+		Environment env = new Environment(closure);
+		env.define("this", instance);
+		return new RainFunction(declaration, env);
+	}
+
 	@Override
 	public int arity() {
 		return declaration.params.size();

@@ -25,33 +25,24 @@ class Parser {
 	private Stmt declaration() {
 		if (match(TokenType.CLASS)) return classDecl();
 
-		// Try function vs variable: look ahead from a type
-		if (isTypeStart()) {
-			int save = current;
-			Stmt.TypeNode t = type();
-			if (t != null && match(TokenType.IDENTIFIER)) {
-				if (match(TokenType.LEFT_PAREN)) {
-					current = save; // rewind, this is a functionDecl()
-					Stmt fn = functionDecl();
-					if (fn != null) return fn;
-					synchronize(); return null;
-				} else {
-					current = save; // rewind, this is a variableDecl()
-					Stmt vd = variableDecl();
-					if (vd != null) {
-						need(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
-						return vd;
-					}
-					synchronize(); return null;
-				}
-			} else {
-				report(peek(), "Expect identifier after type.");
-				current = save;
-			}
+		// Prefer explicit declarators before falling back to statement/expr
+		if (startsFunctionDecl()) {
+			Stmt fn = functionDecl();
+			if (fn != null) return fn;
+			synchronise(); return null;
 		}
+		if (startsVarDecl()) {
+			Stmt vd = variableDecl();
+			if (vd != null) {
+				need(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+				return vd;
+			}
+			synchronise(); return null;
+		}
+
 		// Fallback: generic statement
 		Stmt st = statement();
-		if (st == null) synchronize();
+		if (st == null) synchronise();
 		return st;
 	}
 
@@ -61,15 +52,15 @@ class Parser {
 	// constructor_decl → identifier "(" param_list? ")" block ;
 	private Stmt classDecl() {
 		Token name = need(TokenType.IDENTIFIER, "Expect class name.");
-		if (name == null) { synchronize(); return null; }
-		if (need(TokenType.LEFT_BRACE, "Expect '{' before class body.") == null) { synchronize(); return null; }
+		if (name == null) { synchronise(); return null; }
+		if (need(TokenType.LEFT_BRACE, "Expect '{' before class body.") == null) { synchronise(); return null; }
 		List<Stmt> members = new ArrayList<>();
 		while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
 			// Identify Constructor
 			if (check(TokenType.IDENTIFIER) && peek().lexeme.equals(name.lexeme) && peek(1).type == TokenType.LEFT_PAREN) {
 				// Class name
 				Token ctorName = advance();
-				if (need(TokenType.LEFT_PAREN, "Expect '(' after constructor name.") == null) { synchronize(); continue; }
+				if (need(TokenType.LEFT_PAREN, "Expect '(' after constructor name.") == null) { synchronise(); continue; }
 
 				List<Stmt.Param> params = new ArrayList<>();
 				if (!check(TokenType.RIGHT_PAREN)) {
@@ -77,12 +68,12 @@ class Parser {
 					do {
 						Stmt.TypeNode pt = type();
 						Token pn = need(TokenType.IDENTIFIER, "Expect parameter name.");
-						if (pt == null || pn == null) { synchronize(); break; }
+						if (pt == null || pn == null) { synchronise(); break; }
 						params.add(new Stmt.Param(pt, pn));
 					} while (match(TokenType.COMMA));
 				}
-				if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronize(); continue; }
-				if (need(TokenType.LEFT_BRACE, "Expect '{' before constructor body.") == null) { synchronize(); continue; }
+				if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronise(); continue; }
+				if (need(TokenType.LEFT_BRACE, "Expect '{' before constructor body.") == null) { synchronise(); continue; }
 				List<Stmt> body = block();
 
 				members.add(new Stmt.Constructor(ctorName, params, body));
@@ -90,15 +81,15 @@ class Parser {
 			}
 
 			// Otherwise its a method or a field
-			if (!isTypeStart()) {
+			if (!isTypeHead()) {
 				report(peek(), "Expect type for class member.");
-				synchronize();
+				synchronise();
 				continue;
 			}
 
 			Stmt.TypeNode t = type();
 			Token memberName = need(TokenType.IDENTIFIER, "Expect member name.");
-			if (memberName == null) { synchronize(); continue; }
+			if (memberName == null) { synchronise(); continue; }
 
 			if (match(TokenType.LEFT_PAREN)) {
 				// Method
@@ -107,13 +98,13 @@ class Parser {
 					do {
 						Stmt.TypeNode pt = type();
 						Token pn = need(TokenType.IDENTIFIER, "Expect parameter name.");
-						if (pt == null || pn == null) { synchronize(); break; }
+						if (pt == null || pn == null) { synchronise(); break; }
 						params.add(new Stmt.Param(pt, pn));
 					} while (match(TokenType.COMMA));
 				}
 
-				if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronize(); continue; }
-				if (need(TokenType.LEFT_BRACE, "Expect '{' before method body.") == null) { synchronize(); continue; }
+				if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronise(); continue; }
+				if (need(TokenType.LEFT_BRACE, "Expect '{' before method body.") == null) { synchronise(); continue; }
 				List<Stmt> body = block();
 
 				members.add(new Stmt.Function(t, memberName, params, body));
@@ -121,11 +112,11 @@ class Parser {
 				// Optional initialiser
 				Expr init = null;
 				if (match(TokenType.EQUAL)) init = expression();
-				if (need(TokenType.SEMICOLON, "Expect ';' after field declaration.") == null) { synchronize(); continue; }
+				if (need(TokenType.SEMICOLON, "Expect ';' after field declaration.") == null) { synchronise(); continue; }
 				members.add(new Stmt.Field(t, memberName, init));
 			}
 		}
-		if (need(TokenType.RIGHT_BRACE, "Expect '}' after class body.") == null) synchronize();
+		if (need(TokenType.RIGHT_BRACE, "Expect '}' after class body.") == null) synchronise();
 		return new Stmt.ClassStmt(name, members);
 	}
 
@@ -133,26 +124,26 @@ class Parser {
 	// function_decl → type identifier "(" param_list? ")" block
 	private Stmt functionDecl() {
 		Stmt.TypeNode returnType = type();
-		if (returnType == null) { synchronize(); return null; }
+		if (returnType == null) { synchronise(); return null; }
 
 		Token name = need(TokenType.IDENTIFIER, "Expect function name.");
-		if (name == null) { synchronize(); return null; }
+		if (name == null) { synchronise(); return null; }
 
-		if (need(TokenType.LEFT_PAREN, "Expect '(' after function name.") == null) { synchronize(); return null; }
+		if (need(TokenType.LEFT_PAREN, "Expect '(' after function name.") == null) { synchronise(); return null; }
 
 		List<Stmt.Param> params = new ArrayList<>();
 		if (!check(TokenType.RIGHT_PAREN)) {
 			// Do while look so ugly but they actually work so well
 			do {
 				Stmt.TypeNode pt = type();
-				if (pt == null) { synchronize(); return null; }
+				if (pt == null) { synchronise(); return null; }
 				Token pn = need(TokenType.IDENTIFIER, "Expect parameter name.");
-				if (pn == null) { synchronize(); return null; }
+				if (pn == null) { synchronise(); return null; }
 				params.add(new Stmt.Param(pt, pn));
 			} while (match(TokenType.COMMA));
 		}
-		if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronize(); return null; }
-		if (need(TokenType.LEFT_BRACE, "Expect '{' before function body.") == null) { synchronize(); return null; }
+		if (need(TokenType.RIGHT_PAREN, "Expect ')' after parameters.") == null) { synchronise(); return null; }
+		if (need(TokenType.LEFT_BRACE, "Expect '{' before function body.") == null) { synchronise(); return null; }
 
 		List<Stmt> body = block();
 		return new Stmt.Function(returnType, name, params, body);
@@ -173,22 +164,6 @@ class Parser {
 		return new Stmt.VarDecl(t, name, initializer);
 	}
 
-	// type → (identifier ("[]")?) | "None"
-	private boolean isTypeStart() {
-		if (check(TokenType.NONE)) return true;
-		if (!check(TokenType.IDENTIFIER)) return false;
-
-		// Case 1: Type IDENTIFIER
-		if (peek(1).type == TokenType.IDENTIFIER) return true;
-
-		// Case 2: Type "[]" IDENTIFIER
-		if (peek(1).type == TokenType.LEFT_BRACKET
-			&& peek(2).type == TokenType.RIGHT_BRACKET
-			&& peek(3).type == TokenType.IDENTIFIER) {
-			return true;
-		}
-		return false;
-	}
 	private Stmt.TypeNode type() {
 		if (match(TokenType.NONE)) {
 			return new Stmt.TypeNode(previous(), true, false);
@@ -229,9 +204,9 @@ class Parser {
 
 	// if_stmt → "if" "(" expression ")" block ( "else" ( if_stmt | block ) )?
 	private Stmt ifStmt() {
-		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'if'.") == null) { synchronize(); return null; }
+		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'if'.") == null) { synchronise(); return null; }
 		Expr cond = expression();
-		if (need(TokenType.RIGHT_PAREN, "Expect ')' after if condition.") == null) { synchronize(); return null; }
+		if (need(TokenType.RIGHT_PAREN, "Expect ')' after if condition.") == null) { synchronise(); return null; }
 		Stmt thenBranch = statement();
 		// Recursive for if else branches
 		Stmt elseBranch = null;
@@ -243,20 +218,20 @@ class Parser {
 
 	// while_stmt   → WHILE "(" expression ")" block ;
 	private Stmt whileStmt() {
-		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'while'.") == null) { synchronize(); return null; }
+		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'while'.") == null) { synchronise(); return null; }
 		Expr cond = expression();
-		if (need(TokenType.RIGHT_PAREN, "Expect ')' after while condition.") == null) { synchronize(); return null; }
+		if (need(TokenType.RIGHT_PAREN, "Expect ')' after while condition.") == null) { synchronise(); return null; }
 		Stmt body = statement();
 		return new Stmt.While(cond, body);
 	}
 
 	// for_stmt → "for" "(" (variable_decl | expression)? ";" expression? ";" expression? ")" block
 	private Stmt forStmt() {
-		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'for'.") == null) { synchronize(); return null; }
+		if (need(TokenType.LEFT_PAREN, "Expect '(' after 'for'.") == null) { synchronise(); return null; }
 
 		Stmt initializer = null;
 		if (!check(TokenType.SEMICOLON)) {
-			if (isTypeStart()) {
+			if (isTypeHead()) {
 				initializer = variableDecl();
 				need(TokenType.SEMICOLON, "Expect ';' after for initializer.");
 			} else {
@@ -275,7 +250,7 @@ class Parser {
 
 		Expr increment = null;
 		if (!check(TokenType.RIGHT_PAREN)) increment = expression();
-		if (need(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.") == null) { synchronize(); return null; }
+		if (need(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.") == null) { synchronise(); return null; }
 
 		Stmt body = statement();
 		return new Stmt.For(initializer, condition, increment, body);
@@ -287,7 +262,7 @@ class Parser {
 		while (!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
 			Stmt d = declaration();
 			if (d != null) stmts.add(d);
-			else synchronize();
+			else synchronise();
 		}
 		need(TokenType.RIGHT_BRACE, "Expect '}' after block.");
 		return stmts;
@@ -296,7 +271,10 @@ class Parser {
 	// expression_stmt → expression ";"
 	private Stmt expressionStmt() {
 		Expr expr = expression();
-		need(TokenType.SEMICOLON, "Expect ';' after expression.");
+		if (need(TokenType.SEMICOLON, "Expect ';' after expression.") == null) {
+			synchronise();
+			return null;
+		}
 		return new Stmt.Expression(expr);
 	}
 
@@ -313,7 +291,7 @@ class Parser {
 			} else if (left instanceof Expr.Get g) {
 				return new Expr.Set(g.object, g.name, value);
 			} else if (left instanceof Expr.Index idx) {
-				return new Expr.IndexSet(idx.array, idx.index, value);
+				return new Expr.IndexSet(idx.array, idx.index, value, idx.bracket);
 			}
 			// drop target; keep RHS to continue
 			report(previous(), "Invalid assignment target.");
@@ -407,7 +385,9 @@ class Parser {
 			} else if (match(TokenType.LEFT_BRACKET)) {
 				Expr index = expression();
 				need(TokenType.RIGHT_BRACKET, "Expect ']' after index.");
-				expr = new Expr.Index(expr, index);
+				Token bracket = previousIfType(TokenType.RIGHT_BRACKET);
+				if (bracket == null) bracket = synthetic(TokenType.RIGHT_BRACKET, "]");
+				expr = new Expr.Index(expr, index, bracket);
 			} else if (match(TokenType.DOT)) {
 				Token name = need(TokenType.IDENTIFIER, "Expect property name after '.'.");
 				if (name == null) name = syntheticIdent("<missing>");
@@ -466,8 +446,36 @@ class Parser {
 		// Placeholder to keep parsing
 		return new Expr.Literal(null, null);
 	}
+	private boolean isTypeHead() {
+		return check(TokenType.NONE) || check(TokenType.IDENTIFIER);
+	}
 
+	private boolean startsFunctionDecl() {
+		int i = 0;
+		boolean idType = (peek(i).type == TokenType.IDENTIFIER);
+		if (!(idType || peek(i).type == TokenType.NONE)) return false;
+		i++;
 
+		// Only IDENTIFIER types can be arrays
+		if (idType && peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
+			i += 2;
+		}
+
+		return (peek(i).type == TokenType.IDENTIFIER && peek(i + 1).type == TokenType.LEFT_PAREN);
+	}
+
+	private boolean startsVarDecl() {
+		int i = 0;
+		boolean idType = (peek(i).type == TokenType.IDENTIFIER);
+		if (!(idType || peek(i).type == TokenType.NONE)) return false;
+		i++;
+
+		if (idType && peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
+			i += 2;
+		}
+
+		return (peek(i).type == TokenType.IDENTIFIER && peek(i + 1).type == TokenType.EQUAL);
+	}
 	private boolean match(TokenType... types) {
 		for (TokenType type : types) {
 			if (check(type)) { advance(); return true; }
@@ -510,14 +518,13 @@ class Parser {
 		panicMode = true;
 	}
 
-	// synchronize to next statement boundary, clear panicMode afterwards
-	private void synchronize() {
-		// skip the unexpected token
+	// synchronise to next statement boundary, clear panicMode afterwards
+	private void synchronise() {
 		advance();
-		// Keep looking till we reach something we can foothold s
 		while (!isAtEnd()) {
 			if (previous().type == TokenType.SEMICOLON) break;
 			switch (peek().type) {
+				case RIGHT_BRACE: // ← added
 				case CLASS:
 				case RETURN:
 				case IF:

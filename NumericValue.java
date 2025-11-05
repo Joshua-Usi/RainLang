@@ -9,6 +9,14 @@ class NumericValue {
 	}
 
 	@Override
+	public boolean equals(Object obj) {
+		if (this == obj) return true;
+		if (!(obj instanceof NumericValue other)) return false;
+		return this.type.equals(other.type)
+			&& this.value == other.value;
+	}
+
+	@Override
 	public String toString() {
 		return typeToSuffix(type, value);
 	}

@@ -173,9 +173,10 @@ abstract class Expr {
   }
 
   static class Index extends Expr {
-    Index(Expr array, Expr index) {
+    Index(Expr array, Expr index, Token bracket) {
       this.array = array;
       this.index = index;
+      this.bracket = bracket;
     }
 
 
@@ -185,13 +186,15 @@ abstract class Expr {
     }
     final Expr array;
     final Expr index;
+    final Token bracket;
   }
 
   static class IndexSet extends Expr {
-    IndexSet(Expr array, Expr index, Expr value) {
+    IndexSet(Expr array, Expr index, Expr value, Token bracket) {
       this.array = array;
       this.index = index;
       this.value = value;
+      this.bracket = bracket;
     }
 
 
@@ -202,6 +205,7 @@ abstract class Expr {
     final Expr array;
     final Expr index;
     final Expr value;
+    final Token bracket;
   }
 
   static class Array extends Expr {

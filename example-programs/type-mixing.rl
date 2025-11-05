@@ -1,2 +1,2 @@
-Volume v = 1L;
-print(v);
+Val add(Val a, Val b) { return a + b; }
+print(add);

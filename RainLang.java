@@ -32,11 +32,17 @@ public class RainLang {
 		InputStreamReader input = new InputStreamReader(System.in);
 		BufferedReader reader = new BufferedReader(input);
 
+		interpreter.setReplMode(true);
+
 		while (true) { 
 			System.out.print("> ");
 			String line = reader.readLine();
-			if (line == null) break;
-			if (!line.endsWith(";")) line = line + ";";
+			if (line == null) continue;
+			if (line.length() == 0) continue;
+			char last = line.charAt(line.length() - 1);
+			if (last != ';' && last != '}') {
+				line = line + ";";
+			}
 			if (line.equals("exit")) break;
 			run(line);
 			// Errors shouldn't kill REPL sessions

@@ -4,9 +4,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	final Environment globals = new Environment();
 	private Environment env = globals;
 
+	private boolean replMode = false;
+
 	public Interpreter() {
 		Builtins.registerRuntime(globals);	
 	}
+
+	public void setReplMode(boolean enabled) { this.replMode = enabled; }
 
 	public void interpret(List<Stmt> statements) {
 		try {
@@ -59,6 +63,21 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			return text;
 		}
 
+		if (value instanceof List<?>) {
+			List<?> list = (List<?>) value;
+			StringBuilder sb = new StringBuilder();
+			sb.append("[");
+			for (int i = 0; i < list.size(); i++) {
+				if (i > 0) sb.append(", ");
+				sb.append(stringify(list.get(i)));
+			}
+			sb.append("]");
+			return sb.toString();
+		}
+
+		if (value instanceof RainInstance) return value.toString();
+		if (value instanceof RainClass)    return value.toString();
+
 		return value.toString();
 	}
 	@Override
@@ -69,6 +88,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		// Equality and string concat are handled separately:
 		if (expr.operator.type == TokenType.EQUAL_EQUAL) return isEqual(leftRaw, rightRaw);
 		if (expr.operator.type == TokenType.BANG_EQUAL) return !isEqual(leftRaw, rightRaw);
+
+		// Array concatenation
+		if (expr.operator.type == TokenType.PLUS && leftRaw instanceof List && rightRaw instanceof List) {
+			List<?> L = (List<?>) leftRaw;
+			List<?> R = (List<?>) rightRaw;
+			List<Object> out = new ArrayList<>(L.size() + R.size());
+			out.addAll(L);
+			out.addAll(R);
+			return out;
+		}
 
 		// String concatenation
 		if (expr.operator.type == TokenType.PLUS && leftRaw instanceof String) {
@@ -185,6 +214,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 				NumericValue right = asNum(rightRaw, expr.operator);
 				return new NumericValue(right.type, -right.value);
 			}
+			case TokenType.PLUS: {
+				return asNum(rightRaw, expr.operator);
+			}
 		}
 
 		// Unreachable
@@ -235,45 +267,156 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		// Finally, perform the call
 		return function.call(this, expr.paren, arguments);
 	}
+	@SuppressWarnings("unchecked")
 	@Override
 	public Object visitGetExpr(Expr.Get expr) {
-		return null;
+		Object object = evaluate(expr.object);
+
+		// Class instances
+		if (object instanceof RainInstance inst) {
+			return inst.get(expr.name);
+		}
+
+		// Arrays (java.util.List)
+		if (object instanceof List<?> base) {
+			String m = expr.name.lexeme;
+			switch (m) {
+				case "length":
+					return new NumericValue(Type.val(), base.size());
+
+				case "push":
+					return new Callable() {
+						@Override public int arity() { return 1; }
+						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+							((List<Object>) base).add(args.get(0));
+							return new NumericValue(Type.val(), base.size());
+						}
+						@Override public String toString() { return "<native Array.push>"; }
+					};
+
+				case "pop":
+					return new Callable() {
+						@Override public int arity() { return 0; }
+						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+							if (base.isEmpty())
+								throw new RainRuntimeError(expr.name, "Array.pop() on empty array.");
+							return ((List<Object>) base).remove(base.size() - 1);
+						}
+						@Override public String toString() { return "<native Array.pop>"; }
+					};
+
+				case "clear":
+					return new Callable() {
+						@Override public int arity() { return 0; }
+						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+							((List<Object>) base).clear();
+							return null; // None
+						}
+						@Override public String toString() { return "<native Array.clear>"; }
+					};
+
+				case "insert":
+					return new Callable() {
+						@Override public int arity() { return 2; } // (index: Val, value: Elem)
+						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+							int i = interpreter.asIndex(args.get(0), expr.name);
+							List<Object> l = (List<Object>) base;
+							if (i < 0 || i > l.size())
+								throw new RainRuntimeError(expr.name, "Index " + i + " out of bounds for insert length " + l.size() + ".");
+							l.add(i, args.get(1));
+							return null; // None
+						}
+						@Override public String toString() { return "<native Array.insert>"; }
+					};
+
+				case "removeAt":
+					return new Callable() {
+						@Override public int arity() { return 1; } // (index: Val)
+						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+							int i = interpreter.asIndex(args.get(0), expr.name);
+							List<Object> l = (List<Object>) base;
+							if (i < 0 || i >= l.size())
+								throw new RainRuntimeError(expr.name, "Index " + i + " out of bounds for length " + l.size() + ".");
+							return l.remove(i);
+						}
+						@Override public String toString() { return "<native Array.removeAt>"; }
+					};
+			}
+			throw new RainRuntimeError(expr.name, "Unknown array member '" + m + "'.");
+		}
+
+		// Strings
+		if (object instanceof String s) {
+			String m = expr.name.lexeme;
+			switch (m) {
+				case "length":
+					return new NumericValue(Type.val(), s.length());
+			}
+			throw new RainRuntimeError(expr.name, "Unknown string member '" + m + "'.");
+		}
+
+		throw new RainRuntimeError(expr.name, "Only instances, arrays, and strings have properties.");
 	}
+
 	@Override
 	public Object visitSetExpr(Expr.Set expr) {
-		return null;
+		Object object = evaluate(expr.object);
+		if (!(object instanceof RainInstance inst)) {
+			throw new RainRuntimeError(expr.name, "Only instances have fields.");
+		}
+		Object value = evaluate(expr.value);
+		inst.set(expr.name, value);
+		return value;
 	}
 	@Override
 	public Object visitIndexExpr(Expr.Index expr) {
-		return null;
+		Object base = evaluate(expr.array);
+		List<Object> list = asArray(base, expr.bracket);
+		Object idxVal = evaluate(expr.index);
+		int i = asIndex(idxVal, expr.bracket);
+		if (i < 0 || i >= list.size()) {
+			throw new RainRuntimeError(expr.bracket, "Index " + i + " out of bounds for length " + list.size() + ".");
+		}
+		return list.get(i);
 	}
 	@Override
 	public Object visitIndexSetExpr(Expr.IndexSet expr) {
-		return null;
+		Object base = evaluate(expr.array);
+		List<Object> list = asArray(base, expr.bracket);
+		int i = asIndex(evaluate(expr.index), expr.bracket);
+		if (i < 0 || i >= list.size()) {
+			throw new RainRuntimeError(expr.bracket, "Index " + i + " out of bounds for length " + list.size() + ".");
+		}
+		Object value = evaluate(expr.value);
+		list.set(i, value);
+		return value;
 	}
 	@Override
 	public Object visitArrayExpr(Expr.Array expr) {
-		return null;
+		List<Object> out = new ArrayList<>(expr.elements.size());
+		for (Expr e : expr.elements) {
+			out.add(evaluate(e));
+		}
+		return out;
 	}
 	@Override
 	public Object visitThisExpr(Expr.This expr) {
-		return null;
+		return env.get(expr.keyword);
 	}
 	@Override
 	public Void visitExpressionStmt(Stmt.Expression stmt) {
 		Object value = evaluate(stmt.expression);
-
+		if (replMode && value != null) {
+			System.out.println(stringify(value));
+		}
 		// Unreachable
 		return null;
 	}
 	@Override
 	public Void visitVarDeclStmt(Stmt.VarDecl stmt) {
 		Object value = null;
-		if (stmt.initializer != null) {
-			value = evaluate(stmt.initializer);
-		}
+		if (stmt.initializer != null) value = evaluate(stmt.initializer);
 		env.define(stmt.name.lexeme, value);
-
 		// Unreachable
 		return null;
 	}
@@ -285,6 +428,35 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	}
 	@Override
 	public Void visitClassStmt(Stmt.ClassStmt stmt) {
+		// Reserve the name first so methods can refer to the class
+		env.define(stmt.name.lexeme, null);
+
+		Map<String, RainFunction> methods = new HashMap<>();
+		List<String> fieldNames = new ArrayList<>();
+		List<Stmt> fieldInits = new ArrayList<>();
+		Stmt.Constructor ctor = null;
+
+		// Synthetic 'this' token for fields
+		Token thisTok = new Token(TokenType.THIS, "this", null, stmt.name.line, -1);
+
+		for (Stmt m : stmt.members) {
+			if (m instanceof Stmt.Function fn) {
+				methods.put(fn.name.lexeme, new RainFunction(fn, env));
+			} else if (m instanceof Stmt.Field f) {
+				fieldNames.add(f.name.lexeme);
+				if (f.initializer != null) {
+					// Add this
+					Expr set = new Expr.Set(new Expr.This(thisTok), f.name, f.initializer);
+					fieldInits.add(new Stmt.Expression(set));
+				}
+			} else if (m instanceof Stmt.Constructor c) {
+				ctor = c;
+			}
+		}
+
+		RainClass k = new RainClass(stmt.name.lexeme, env, methods, fieldNames, fieldInits, ctor);
+		// Replace the placeholder with the actual class object
+		env.assign(stmt.name, k);
 		return null;
 	}
 	@Override
@@ -350,6 +522,28 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			throw new RainRuntimeError(op, "Expected a numeric value, got " + v);
 		}
 		return (NumericValue)v;
+	}
+	// What da heck?
+	@SuppressWarnings("unchecked")
+	private List<Object> asArray(Object v, Token at) {
+		if (!(v instanceof List)) {
+			throw new RainRuntimeError(at, "Expected an array, got " + stringify(v));
+		}
+		return (List<Object>) v;
+	}
+	private int asIndex(Object v, Token at) {
+		NumericValue n = asNum(v, at);
+		if (!n.type.equals(Type.val())) {
+			throw new RainRuntimeError(at, "Array index must be Val, got " + n.type + ".");
+		}
+		double d = n.value;
+		if (Double.isNaN(d) || Double.isInfinite(d) || Math.floor(d) != d) {
+			throw new RainRuntimeError(at, "Array index must be an integer, got " + stringify(n));
+		}
+		if (d < Integer.MIN_VALUE || d > Integer.MAX_VALUE) {
+			throw new RainRuntimeError(at, "Array index out of range: " + stringify(n));
+		}
+		return (int) d;
 	}
 	public String display(Object value) {
 		return stringify(value);
