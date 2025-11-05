@@ -7,6 +7,7 @@ public class RainLang {
 	public static final int ERR_INVALID_USAGE = 64;
 	public static final int ERR_SOURCE_CODE_ERROR = 65;
 	private static final Interpreter interpreter = new Interpreter();
+	private static final SemanticAnalyser semanal = new SemanticAnalyser();
 	
 	private static int errors = 0;
 	
@@ -34,7 +35,7 @@ public class RainLang {
 		while (true) { 
 			System.out.print("> ");
 			String line = reader.readLine();
-			if (line != null) break;
+			if (line == null) break;
 			if (!line.endsWith(";")) line = line + ";";
 			if (line.equals("exit")) break;
 			run(line);
@@ -54,7 +55,14 @@ public class RainLang {
 		// AstPrinter p = new AstPrinter();
 		// System.out.println(p.printStmts(program));
 		// If parsing fails, assume program is unrunnable
-		if (errors > 0) return;
+
+		// Type checks and all that fluff
+		semanal.analyse(program);
+
+		if (errors > 0) {
+			System.out.println(errors + " Errors.");
+			return;
+		}
 		
 		interpreter.interpret(program);
 	}

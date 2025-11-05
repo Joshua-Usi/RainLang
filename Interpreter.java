@@ -5,32 +5,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	private Environment env = globals;
 
 	public Interpreter() {
-		// Built ins
-		globals.define("print", new Callable() {
-			@Override
-			public int arity() { return 1; }
-			@Override
-			public Object call(Interpreter interpreter, Token paren, List<Object> args) {
-				System.out.println(stringify(args.get(0)));
-				return null;
-			}
-			@Override
-			public String toString() { return "<native fn print>"; }
-		});
-		globals.define("assert", new Callable() {
-			@Override
-			public int arity() { return 1; }
-			@Override
-			public Object call(Interpreter interpreter, Token paren, List<Object> args) {
-				Object value = args.get(0);
-				if (!isTruthy(value)) {
-					throw new RainRuntimeError(paren, "Assertion failed: " + stringify(value));
-				}
-				return null;
-			}
-			@Override
-			public String toString() { return "<native fn assert>"; }
-		});
+		Builtins.registerRuntime(globals);	
 	}
 
 	public void interpret(List<Stmt> statements) {
@@ -63,7 +38,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	private boolean isTruthy(Object object) {
 		if (object == null) return false;
 		if (object instanceof Boolean) return (boolean)object;
-		// Everything is truthy for now
+		// If value is 0, then treat it falsy
+		if (object instanceof NumericValue && ((NumericValue)object).value == 0) return false;
+		// Otherwise true
 		return true;
 	}
 	private boolean isEqual(Object a, Object b) {
@@ -86,84 +63,145 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	}
 	@Override
 	public Object visitBinaryExpr(Expr.Binary expr) {
-		Object left = evaluate(expr.left);
-		Object right = evaluate(expr.right);
+		Object leftRaw = evaluate(expr.left);
+		Object rightRaw = evaluate(expr.right);
 
-		switch (expr.operator.type) {
-			// TODO, implement overloads for different types
-			case TokenType.PLUS:
-				return (double)left + (double)right;
-			case TokenType.MINUS:
-				return (double)left - (double)right;
-			case TokenType.SLASH:
-				if ((double)right == 0) {
-					throw new RainRuntimeError(expr.operator, "Division by zero.");
-				}
-				return (double)left / (double)right;
-			case TokenType.STAR:
-				return (double)left * (double)right;
-			case TokenType.GREATER:
-				return (double)left > (double)right;
-			case TokenType.GREATER_EQUAL:
-				return (double)left >= (double)right;
-			case TokenType.LESS:
-				return (double)left < (double)right;
-			case TokenType.LESS_EQUAL:
-				return (double)left <= (double)right;
-			case TokenType.BANG_EQUAL:
-				return !isEqual(left, right);
-			case TokenType.EQUAL_EQUAL:
-				return isEqual(left, right);
+		// Equality and string concat are handled separately:
+		if (expr.operator.type == TokenType.EQUAL_EQUAL) return isEqual(leftRaw, rightRaw);
+		if (expr.operator.type == TokenType.BANG_EQUAL) return !isEqual(leftRaw, rightRaw);
+
+		// String concatenation
+		if (expr.operator.type == TokenType.PLUS && leftRaw instanceof String) {
+			return (String)leftRaw + stringify(rightRaw);
 		}
 
-		// Unreachable
+		// Numeric domain operations
+		NumericValue left = asNum(leftRaw, expr.operator);
+		NumericValue right = asNum(rightRaw, expr.operator);
+
+		Type L = left.type;
+		Type R = right.type;
+
+		switch (expr.operator.type) {
+			// Inequalities
+			case GREATER:
+			case GREATER_EQUAL:
+			case LESS:
+			case LESS_EQUAL:
+				// Must be numeric AND same type
+				if (!L.isNumericDomain() || !R.isNumericDomain() || !L.equals(R)) {
+					throw new RainRuntimeError(expr.operator,
+						"Relational operators require matching numeric types; got " + L + " and " + R + ".");
+				}
+
+				switch (expr.operator.type) {
+					case GREATER:       return left.value >  right.value;
+					case GREATER_EQUAL: return left.value >= right.value;
+					case LESS:          return left.value <  right.value;
+					case LESS_EQUAL:    return left.value <= right.value;
+				}
+				// (unreachable)
+				break;
+
+			// Addition
+			case PLUS:
+				if (L.equals(Type.volume()) && R.equals(Type.volume()))
+					return new NumericValue(Type.volume(), left.value + right.value);
+				if (L.equals(Type.area()) && R.equals(Type.area()))
+					return new NumericValue(Type.area(), left.value + right.value);
+				if (L.equals(Type.rain()) && R.equals(Type.rain()))
+					return new NumericValue(Type.rain(), left.value + right.value);
+				throw new RainRuntimeError(expr.operator, "Invalid + between " + L + " and " + R + ".");
+
+			// Subtraction
+			case MINUS:
+				if (L.equals(Type.volume()) && R.equals(Type.volume()))
+					return new NumericValue(Type.volume(), left.value - right.value);
+				if (L.equals(Type.area()) && R.equals(Type.area()))
+					return new NumericValue(Type.area(), left.value - right.value);
+				if (L.equals(Type.rain()) && R.equals(Type.rain()))
+					return new NumericValue(Type.rain(), left.value - right.value);
+				throw new RainRuntimeError(expr.operator, "Invalid - between " + L + " and " + R + ".");
+
+			// Multiplication
+			case STAR:
+				// Val scaling
+				if (L.equals(Type.val()) && R.isNumericDomain())
+					return new NumericValue(R, left.value * right.value);
+				if (R.equals(Type.val()) && L.isNumericDomain())
+					return new NumericValue(L, left.value * right.value);
+				// Area * Rain = Volume
+				if (L.equals(Type.area()) && R.equals(Type.rain()))
+					return new NumericValue(Type.volume(), left.value * right.value);
+				if (L.equals(Type.rain()) && R.equals(Type.area()))
+					return new NumericValue(Type.volume(), left.value * right.value);
+
+				throw new RainRuntimeError(expr.operator, "Invalid * between " + L + " and " + R + ".");
+
+			// Division
+			case SLASH:
+				if (right.value == 0)
+					throw new RainRuntimeError(expr.operator, "Division by zero.");
+				// X / Val = X
+				if (R.equals(Type.val()) && L.isNumericDomain())
+					return new NumericValue(L, left.value / right.value);
+				// Volume / Rain = Area
+				if (L.equals(Type.volume()) && R.equals(Type.rain()))
+					return new NumericValue(Type.area(), left.value / right.value);
+				// Volume / Area = Rain
+				if (L.equals(Type.volume()) && R.equals(Type.area()))
+					return new NumericValue(Type.rain(), left.value / right.value);
+				throw new RainRuntimeError(expr.operator, "Invalid / between " + L + " and " + R + ".");
+		}
+		// unreachable
 		return null;
 	}
 	@Override
 	public Object visitGroupingExpr(Expr.Grouping expr) {
 		return evaluate(expr.expression);
 	}
+
 	@Override
 	public Object visitLiteralExpr(Expr.Literal expr) {
 		if (expr.value == null) return null;
-	    if (expr.value instanceof Boolean) return expr.value;
-	    if (expr.value instanceof String) return expr.value;
-		
-		Object value = expr.value;
-		String literalSuffix = (expr.unit != null) ? expr.unit.lexeme : null;
-		double multiplier = 1.0;
+		if (expr.value instanceof Boolean) return expr.value;
+		if (expr.value instanceof String) return expr.value;
 
-		if (literalSuffix != null) {
-			switch (literalSuffix) {
-				// Capacity
-				case "L": multiplier = 1.0; break;
-				case "kL": multiplier = 1_000.0; break;
-				case "ML": multiplier = 1_000_000.0; break;
-				case "GL": multiplier = 1_000_000_000.0; break;
-				case "TL": multiplier = 1_000_000_000_000.0; break;
-				// Percentage
-				case "%": multiplier = 0.01; break;
-				// Rain
-				case "mm": multiplier = 1.0; break;
-				// Area
-				case "m2": multiplier = 1.0; break;
-				case "km2": multiplier = 1_000_000.0; break;
+		double raw = ((Number)expr.value).doubleValue();
+		String suffix = expr.unit != null ? expr.unit.lexeme : null;
+
+		Type type = Type.val();
+		double scaled = raw;
+
+		if (suffix != null) {
+			switch (suffix) {
+				case "L":  type = Type.volume(); scaled = raw; break;
+				case "kL": type = Type.volume(); scaled = raw * 1_000; break;
+				case "ML": type = Type.volume(); scaled = raw * 1_000_000; break;
+				case "GL": type = Type.volume(); scaled = raw * 1_000_000_000; break;
+				case "TL": type = Type.volume(); scaled = raw * 1_000_000_000_000.0; break;
+				case "mm": type = Type.rain();   scaled = raw; break;
+				case "m2": type = Type.area();   scaled = raw; break;
+				case "km2":type = Type.area();   scaled = raw * 1_000_000; break;
+				case "%":  type = Type.val();    scaled = raw * 0.01; break;
 				default:
-					throw new RainRuntimeError(expr.unit, "Unknown literal");
+					throw new RainRuntimeError(expr.unit, "Unknown literal unit '" + suffix + "'");
 			}
 		}
 
-		return (Object)((double)value * multiplier);
+		return new NumericValue(type, scaled);
 	}
+
 	@Override
 	public Object visitUnaryExpr(Expr.Unary expr) {
-		Object right = evaluate(expr.right);
+		Object rightRaw = evaluate(expr.right);
+		NumericValue right = asNum(rightRaw, expr.operator);
 
 		switch (expr.operator.type) {
 			case TokenType.BANG:
-				return !isTruthy(right);
+				return !isTruthy(right.value);
 			case TokenType.MINUS:
-				return -(double)right;
+				return new NumericValue(right.type, -right.value);
 		}
 
 		// Unreachable
@@ -247,7 +285,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	}
 	@Override
 	public Void visitVarDeclStmt(Stmt.VarDecl stmt) {
-		System.out.println(stmt.toString());
 		Object value = null;
 		if (stmt.initializer != null) {
 			value = evaluate(stmt.initializer);
@@ -324,5 +361,18 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	@Override
 	public Void visitConstructorStmt(Stmt.Constructor stmt) {
 		return null;
+	}
+	private NumericValue asNum(Object v, Token op) {
+		if (!(v instanceof NumericValue)) {
+			throw new RainRuntimeError(op, "Expected a numeric value, got " + v);
+		}
+		return (NumericValue)v;
+	}
+	public String display(Object value) {
+		return stringify(value);
+	}
+
+	public boolean truthy(Object value) {
+		return isTruthy(value);
 	}
 }
