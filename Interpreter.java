@@ -10,12 +10,26 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			@Override
 			public int arity() { return 1; }
 			@Override
-			public Object call(Interpreter interpreter, List<Object> args) {
+			public Object call(Interpreter interpreter, Token paren, List<Object> args) {
 				System.out.println(stringify(args.get(0)));
 				return null;
 			}
 			@Override
 			public String toString() { return "<native fn print>"; }
+		});
+		globals.define("assert", new Callable() {
+			@Override
+			public int arity() { return 1; }
+			@Override
+			public Object call(Interpreter interpreter, Token paren, List<Object> args) {
+				Object value = args.get(0);
+				if (!isTruthy(value)) {
+					throw new RainRuntimeError(paren, "Assertion failed: " + stringify(value));
+				}
+				return null;
+			}
+			@Override
+			public String toString() { return "<native fn assert>"; }
 		});
 	}
 
@@ -74,7 +88,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	public Object visitBinaryExpr(Expr.Binary expr) {
 		Object left = evaluate(expr.left);
 		Object right = evaluate(expr.right);
-
 
 		switch (expr.operator.type) {
 			// TODO, implement overloads for different types
@@ -199,7 +212,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		}
 
 		// Finally, perform the call
-		return function.call(this, arguments);
+		return function.call(this, expr.paren, arguments);
 	}
 	@Override
 	public Object visitGetExpr(Expr.Get expr) {
@@ -234,6 +247,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	}
 	@Override
 	public Void visitVarDeclStmt(Stmt.VarDecl stmt) {
+		System.out.println(stmt.toString());
 		Object value = null;
 		if (stmt.initializer != null) {
 			value = evaluate(stmt.initializer);

@@ -34,6 +34,8 @@ public class RainLang {
 		while (true) { 
 			System.out.print("> ");
 			String line = reader.readLine();
+			if (line != null) break;
+			if (!line.endsWith(";")) line = line + ";";
 			if (line.equals("exit")) break;
 			run(line);
 			// Errors shouldn't kill REPL sessions
@@ -49,7 +51,7 @@ public class RainLang {
 		Parser parser = new Parser(tokens);
 		List<Stmt> program = parser.parse();
 		// For debugging parser
-		AstPrinter p = new AstPrinter();
+		// AstPrinter p = new AstPrinter();
 		// System.out.println(p.printStmts(program));
 		// If parsing fails, assume program is unrunnable
 		if (errors > 0) return;

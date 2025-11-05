@@ -15,7 +15,7 @@ class RainFunction implements Callable {
 	}
 
 	@Override
-	public Object call(Interpreter interpreter, List<Object> args) {
+	public Object call(Interpreter interpreter, Token paren, List<Object> args) {
 		Environment env = new Environment(closure);
 
 		// Bind parameters
