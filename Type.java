@@ -66,29 +66,29 @@ public class Type {
 	}
 
 	@Override
-public boolean equals(Object o) {
-	if (this == o) return true;
-	if (!(o instanceof Type)) return false;
-	Type other = (Type) o;
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof Type)) return false;
+		Type other = (Type) o;
 
-	if (this.kind != other.kind) return false;
+		if (this.kind != other.kind) return false;
 
-	switch (kind) {
-		case ARRAY:
-			return this.element.equals(other.element);
+		switch (kind) {
+			case ARRAY:
+				return this.element.equals(other.element);
 
-		case CLASS:
-			return Objects.equals(this.name, other.name);
+			case CLASS:
+				return Objects.equals(this.name, other.name);
 
-		case FUNCTION:
-			// return types must match
-			if (!this.returnType.equals(other.returnType)) return false;
-			// parameter lists must match length + element types
-			return Objects.equals(this.paramTypes, other.paramTypes);
+			case FUNCTION:
+				// return types must match
+				if (!this.returnType.equals(other.returnType)) return false;
+				// parameter lists must match length + element types
+				return Objects.equals(this.paramTypes, other.paramTypes);
 
-		default:
-			// Primitive and domain types compare by kind only
-			return true;
+			default:
+				// Primitive and domain types compare by kind only
+				return true;
+		}
 	}
-}
 }

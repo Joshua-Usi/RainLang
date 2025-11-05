@@ -377,12 +377,13 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			// Equality and inequalities
 			case TokenType.EQUAL_EQUAL:
 			case TokenType.BANG_EQUAL:
+				return Type.bool();
 			case TokenType.GREATER:
 			case TokenType.GREATER_EQUAL:
 			case TokenType.LESS:
 			case TokenType.LESS_EQUAL:
-				if (!L.equals(R)) {
-					RainLang.error(op.line, "Equalities requires operands of the same type; got " + L + " and " + R + ".");
+				if (!L.isNumericDomain() || !R.isNumericDomain() || !L.equals(R)) {
+					RainLang.error(op.line, "Relational operators require matching numeric types; got " + L + " and " + R + ".");
 				}
 				return Type.bool();
 
@@ -401,10 +402,11 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 					}
 					return Type.arrayOf(L.element);
 				}
-				// Volume/Area/Rain same-kind addition
+				// Volume/Area/Rain/Val same-kind addition
 				if (L.equals(Type.volume()) && R.equals(Type.volume())) return Type.volume();
 				if (L.equals(Type.area())  && R.equals(Type.area()))  return Type.area();
 				if (L.equals(Type.rain())  && R.equals(Type.rain()))  return Type.rain();
+				if (L.equals(Type.val())   && R.equals(Type.val()))   return Type.val();
 				RainLang.error(op.line, "Invalid operator '+' between " + L + " and " + R + ".");
 				return Type.unknown();
 
@@ -413,6 +415,7 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 				if (L.equals(Type.volume()) && R.equals(Type.volume())) return Type.volume();
 				if (L.equals(Type.area())  && R.equals(Type.area()))  return Type.area();
 				if (L.equals(Type.rain())  && R.equals(Type.rain()))  return Type.rain();
+				if (L.equals(Type.val())   && R.equals(Type.val()))   return Type.val();
 				RainLang.error(op.line, "Invalid operator '-' between " + L + " and " + R + ".");
 				return Type.unknown();
 

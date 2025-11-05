@@ -88,12 +88,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			case GREATER_EQUAL:
 			case LESS:
 			case LESS_EQUAL:
-				// Must be numeric AND same type
-				if (!L.isNumericDomain() || !R.isNumericDomain() || !L.equals(R)) {
-					throw new RainRuntimeError(expr.operator,
-						"Relational operators require matching numeric types; got " + L + " and " + R + ".");
-				}
-
 				switch (expr.operator.type) {
 					case GREATER:       return left.value >  right.value;
 					case GREATER_EQUAL: return left.value >= right.value;
@@ -105,23 +99,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
 			// Addition
 			case PLUS:
-				if (L.equals(Type.volume()) && R.equals(Type.volume()))
-					return new NumericValue(Type.volume(), left.value + right.value);
-				if (L.equals(Type.area()) && R.equals(Type.area()))
-					return new NumericValue(Type.area(), left.value + right.value);
-				if (L.equals(Type.rain()) && R.equals(Type.rain()))
-					return new NumericValue(Type.rain(), left.value + right.value);
-				throw new RainRuntimeError(expr.operator, "Invalid + between " + L + " and " + R + ".");
+				return new NumericValue(left.type, left.value + right.value);
 
 			// Subtraction
 			case MINUS:
-				if (L.equals(Type.volume()) && R.equals(Type.volume()))
-					return new NumericValue(Type.volume(), left.value - right.value);
-				if (L.equals(Type.area()) && R.equals(Type.area()))
-					return new NumericValue(Type.area(), left.value - right.value);
-				if (L.equals(Type.rain()) && R.equals(Type.rain()))
-					return new NumericValue(Type.rain(), left.value - right.value);
-				throw new RainRuntimeError(expr.operator, "Invalid - between " + L + " and " + R + ".");
+				return new NumericValue(left.type, left.value - right.value);
 
 			// Multiplication
 			case STAR:
@@ -195,13 +177,14 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	@Override
 	public Object visitUnaryExpr(Expr.Unary expr) {
 		Object rightRaw = evaluate(expr.right);
-		NumericValue right = asNum(rightRaw, expr.operator);
 
 		switch (expr.operator.type) {
 			case TokenType.BANG:
-				return !isTruthy(right.value);
-			case TokenType.MINUS:
+				return !isTruthy(rightRaw);
+			case TokenType.MINUS: {
+				NumericValue right = asNum(rightRaw, expr.operator);
 				return new NumericValue(right.type, -right.value);
+			}
 		}
 
 		// Unreachable
