@@ -196,15 +196,13 @@ connect(a, b);
 // 4mm on day 1, 3mm on day 2, 2mm on day 3, 1mm on day 4, simulates runoff over time
 rain(a, 10mm, [ 40%, 30%, 20%, 10% ]);
 
-simulate();
 
-print("A details: ");
-print("Area: " + a.area);
-print("Volume: " + a.volume);
-
-print("B details: ");
-print("Area: " + b.area);
-print("Volume: " + b.volume);
+for (Val i = 0; i < 10; i = i + 1) {
+	simulate();
+	print("Day " + (i + 1));
+	print("A: Area=" + a.area + ", Volume=" + a.volume);
+	print("B: Area=" + b.area + ", Volume=" + b.volume);
+}
 
 // ---------------- Automatically added to the end of programs (if a hydrology report wasn't already requested) ----------------
 
