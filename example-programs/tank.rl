@@ -1,4 +1,4 @@
-// ---------------- "Standard library" (Included in every program) ----------------
+// ---------------- "Standard library" (Automatically included in every program) ----------------
 // List of all simulated bodies
 Body[] __BODY_REGISTRY = [];
 // List of all active rain events
@@ -34,12 +34,12 @@ class Body {
 
 	// Apply sources
 	None __apply_source() {
-		this.volume = this.volume + sources;
+		this.volume = this.volume + this.sources;
 	}
 
 	// Apply sinks while also not going negative
 	None __apply_sink() {
-		this.volume = this.volume - sources;
+		this.volume = this.volume - this.sources;
 		// Negative volume doesn't make sense so cap it
 		if (this.volume < 0L) {
 			this.volume = 0L;
@@ -198,9 +198,6 @@ rain(a, 10mm, [ 40%, 30%, 20%, 10% ]);
 
 simulate();
 
-// Print a nicely formatted report
-hydrology_report();
-
 print("A details: ");
 print("Area: " + a.area);
 print("Volume: " + a.volume);
@@ -208,3 +205,8 @@ print("Volume: " + a.volume);
 print("B details: ");
 print("Area: " + b.area);
 print("Volume: " + b.volume);
+
+// ---------------- Automatically added to the end of programs (if a hydrology report wasn't already requested) ----------------
+
+// Print a nicely formatted report on program exit
+hydrology_report();

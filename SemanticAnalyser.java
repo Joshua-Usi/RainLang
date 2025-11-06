@@ -273,12 +273,14 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Type visitCallExpr(Expr.Call expr) {
+		// Free function overloads or constructor calls when callee is an identifier
 		if (expr.callee instanceof Expr.Variable v) {
 			String fname = v.name.lexeme;
 
 			List<Type> argTypes = new ArrayList<>(expr.arguments.size());
 			for (Expr a : expr.arguments) argTypes.add(visit(a));
 
+			// Try free-function overloads first
 			List<Type> candidates = env.lookupFunctionOverloads(fname);
 			if (candidates != null && !candidates.isEmpty()) {
 				List<Integer> matches = new ArrayList<>();
@@ -308,8 +310,31 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 						String.join(", ", argTypes.stream().map(Type::toString).toList()) + ").");
 				return Type.unknown();
 			}
+
+			// Fall back to constructor call if the identifier is a class
+			Type sym = env.lookup(fname);
+			if (sym != null && sym.kind == Type.Kind.CLASS) {
+				ClassInfo ci = classes.get(sym.name);
+				if (ci != null && ci.ctor != null) {
+					List<Type> params = ci.ctor.params;
+					if (params.size() != argTypes.size()) {
+						RainLang.error(getLine(expr), "Expected " + params.size() + " arguments but got " + argTypes.size() + ".");
+					} else {
+						for (int i = 0; i < params.size(); i++) {
+							if (!isAssignable(argTypes.get(i), params.get(i))) {
+								RainLang.error(getLine(expr.arguments.get(i)),
+									"Argument " + (i + 1) + " type mismatch: expected " + params.get(i) + " but got " + argTypes.get(i) + ".");
+							}
+						}
+					}
+				} else if (!argTypes.isEmpty()) {
+					RainLang.error(getLine(expr), "Expected 0 arguments but got " + argTypes.size() + ".");
+				}
+				return sym;
+			}
 		}
 
+		// General callable (methods/array built-ins/etc.)
 		Type calleeT = visit(expr.callee);
 
 		List<Type> argTypes = new ArrayList<>(expr.arguments.size());
@@ -333,6 +358,7 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		RainLang.error(getLine(expr.callee), "Attempted to call a non-callable expression of type " + calleeT + ".");
 		return Type.unknown();
 	}
+
 
 	@Override
 	public Type visitGetExpr(Expr.Get expr) {
