@@ -183,14 +183,28 @@ class Parser {
 		return new Stmt.TypeNode(name, false, isArray);
 	}
 
-	// statement → return_stmt | control_flow | block | expression_stmt
-	private Stmt statement() {
+	// statement → return_stmt | control_flow | block | expression_stmt | continue | break
+		private Stmt statement() {
 		if (match(TokenType.RETURN)) return returnStmt();
 		if (match(TokenType.IF))         return ifStmt();
 		if (match(TokenType.WHILE)) return whileStmt();
 		if (match(TokenType.FOR))       return forStmt();
+		if (match(TokenType.BREAK))     return breakStmt();
+		if (match(TokenType.CONTINUE))  return continueStmt();
 		if (match(TokenType.LEFT_BRACE)) return new Stmt.Block(block());
 		return expressionStmt();
+	}
+
+	private Stmt breakStmt() {
+		Token kw = previous();
+		need(TokenType.SEMICOLON, "Expect ';' after break.");
+		return new Stmt.Break(kw);
+	}
+
+	private Stmt continueStmt() {
+		Token kw = previous();
+		need(TokenType.SEMICOLON, "Expect ';' after continue.");
+		return new Stmt.Continue(kw);
 	}
 
 	// return_stmt → "return" expression? ";"
@@ -530,6 +544,8 @@ class Parser {
 				case IF:
 				case WHILE:
 				case FOR:
+				case BREAK:
+				case CONTINUE:
 					break;
 				default:
 					advance();

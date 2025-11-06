@@ -27,6 +27,8 @@ public class Scanner {
 		keywords.put("else", TokenType.ELSE);
 		keywords.put("while", TokenType.WHILE);
 		keywords.put("for", TokenType.FOR);
+		keywords.put("break", TokenType.BREAK);
+		keywords.put("continue", TokenType.CONTINUE);
 		// High level concepts
 		keywords.put("return", TokenType.RETURN);
 		keywords.put("class", TokenType.CLASS);

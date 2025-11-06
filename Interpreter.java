@@ -473,10 +473,17 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	@Override
 	public Void visitWhileStmt(Stmt.While stmt) {
 		while (isTruthy(evaluate(stmt.condition))) {
-			execute(stmt.body);
+			try {
+				execute(stmt.body);
+			} catch (RainContinue c) {
+				continue;
+			} catch (RainBreak b) {
+				break;
+			}
 		}
 		return null;
 	}
+
 	@Override
 	public Void visitForStmt(Stmt.For stmt) {
 		Environment loopEnv = new Environment(env);
@@ -486,7 +493,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 				execute(stmt.initializer);
 			}
 			while (stmt.condition == null || isTruthy(evaluate(stmt.condition))) {
-				execute(stmt.body);
+				try {
+					execute(stmt.body);
+				} catch (RainContinue c) {
+					// fall through to increment
+				} catch (RainBreak b) {
+					break;
+				}
 				if (stmt.increment != null) {
 					evaluate(stmt.increment);
 				}
@@ -494,9 +507,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		} finally {
 			env = loopEnv.enclosing;
 		}
-
 		return null;
 	}
+
 	@Override
 	public Void visitReturnStmt(Stmt.Return stmt) {
 		Object value = null;
@@ -546,4 +559,15 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	public boolean truthy(Object value) {
 		return isTruthy(value);
 	}
+
+	@Override
+	public Void visitBreakStmt(Stmt.Break stmt) {
+		throw new RainBreak();
+	}
+
+	@Override
+	public Void visitContinueStmt(Stmt.Continue stmt) {
+		throw new RainContinue();
+	}
+
 }

@@ -5,6 +5,7 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	private final Deque<Type> returnStack = new ArrayDeque<>();
 	private final Deque<Type> classStack = new ArrayDeque<>();
 	private boolean firstEnter = true;
+	private int loopDepth = 0;
 
 	// member typing registry
 	private static final class FnSig {
@@ -109,7 +110,9 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	public Void visitWhileStmt(Stmt.While stmt) {
 		Type cond = visit(stmt.condition);
 		requireBool(stmt.condition, cond, "While condition must be Bool, got " + cond + ".");
+		loopDepth++;
 		visit(stmt.body);
+		loopDepth--;
 		return null;
 	}
 
@@ -122,8 +125,26 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			requireBool(stmt.condition, t, "For-loop condition must be Bool, got " + t + ".");
 		}
 		if (stmt.increment != null) visit(stmt.increment);
+		loopDepth++;
 		visit(stmt.body);
+		loopDepth--;
 		env.pop();
+		return null;
+	}
+
+	@Override
+	public Void visitBreakStmt(Stmt.Break stmt) {
+		if (loopDepth == 0) {
+			RainLang.error(stmt.keyword.line, "break used outside of a loop.");
+		}
+		return null;
+	}
+
+	@Override
+	public Void visitContinueStmt(Stmt.Continue stmt) {
+		if (loopDepth == 0) {
+			RainLang.error(stmt.keyword.line, "continue used outside of a loop.");
+		}
 		return null;
 	}
 

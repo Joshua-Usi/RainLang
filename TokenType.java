@@ -9,7 +9,7 @@ public enum TokenType {
 	MINUS, PLUS, SLASH, STAR,
 
 	// Control flow keywords
-	IF, ELSE, WHILE, FOR,
+	IF, ELSE, WHILE, FOR, BREAK, CONTINUE,
 
 	// Boolean keywords
 	TRUE, FALSE,

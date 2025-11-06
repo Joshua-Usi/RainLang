@@ -176,11 +176,25 @@ None simulate() {
 	simulate(1);
 }
 
-// Prints a nice hyrology report
-None hydrology_report() {
+
+// Prints a nice hyrology report on a set of bodies
+None hydrology_report(Body[] bodies) {
+	// make this size nicely depending on the number of bodies being printed, We might need to track things
 	print("--------------------------------------------------------------------------------------------------------------------------------");
 	print("| Hydrology Report                                                                                                             |");
 	print("--------------------------------------------------------------------------------------------------------------------------------");
+	// So days print in rows, each row is 1 day, from day 0 to the nth day simulated
+	// Each column is bodies, at the top print their names and their capacities at each day (As well as the overall flow change). in the format "volume (+-change)"
+}
+
+// Print on a single body
+None hydrology_report(Body body) {
+	hydrology_report([ body ]);
+}
+
+// Print over every body. Note it can be heavy because it may print an extreme amount of bodies
+None hydrology_report() {
+	hydrology_report(__BODY_REGISTRY);
 }
 
 // ---------------- Start of actual program ----------------
@@ -196,15 +210,21 @@ connect(a, b);
 // 4mm on day 1, 3mm on day 2, 2mm on day 3, 1mm on day 4, simulates runoff over time
 rain(a, 10mm, [ 40%, 30%, 20%, 10% ]);
 
+Val days_to_simulate = 10;
 
-for (Val i = 0; i < 10; i = i + 1) {
-	simulate();
-	print("Day " + (i + 1));
+for (Val i = 0; i <= days_to_simulate; i = i + 1) {
+	print("Day " + (i));
 	print("A: Area=" + a.area + ", Volume=" + a.volume);
 	print("B: Area=" + b.area + ", Volume=" + b.volume);
+	if (i >= days_to_simulate) {
+		break;
+	}
+	simulate();
 }
+
+hydrology_report([ a, b ]);
 
 // ---------------- Automatically added to the end of programs (if a hydrology report wasn't already requested) ----------------
 
-// Print a nicely formatted report on program exit
-hydrology_report();
+// Print a nicely formatted report on program exit (Only if the program never called hydrology_report() itself)
+// hydrology_report();

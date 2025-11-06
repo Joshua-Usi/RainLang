@@ -13,6 +13,8 @@ abstract class Stmt {
 		R visitReturnStmt(Return stmt);
 		R visitFieldStmt(Field stmt);
 		R visitConstructorStmt(Constructor stmt);
+		R visitBreakStmt(Break stmt);
+		R visitContinueStmt(Continue stmt);
 	}
 
 	static class Expression extends Stmt {
@@ -134,5 +136,15 @@ abstract class Stmt {
 		@Override <R> R accept(Visitor<R> visitor) {
 			return visitor.visitConstructorStmt(this);
 		}
+	}
+	static class Break extends Stmt {
+		final Token keyword;
+		Break(Token keyword) { this.keyword = keyword; }
+		@Override <R> R accept(Visitor<R> visitor) { return visitor.visitBreakStmt(this); }
+	}
+	static class Continue extends Stmt {
+		final Token keyword;
+		Continue(Token keyword) { this.keyword = keyword; }
+		@Override <R> R accept(Visitor<R> visitor) { return visitor.visitContinueStmt(this); }
 	}
 }
