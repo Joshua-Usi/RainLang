@@ -285,58 +285,34 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Type visitCallExpr(Expr.Call expr) {
-		if (expr.callee instanceof Expr.Get) {
-			Expr.Get g = (Expr.Get) expr.callee;
-			Type recv = visit(g.object);
+		// 1) Type-check the callee (works for free functions and obj.method; 
+		//    visitGetExpr already returns FUNCTION/Val/etc. for members)
+		Type calleeT = visit(expr.callee);
 
-			// Collect argument types
-			List<Type> argTypes = new ArrayList<>(expr.arguments.size());
-			for (Expr a : expr.arguments) argTypes.add(visit(a));
+		// 2) Collect argument types
+		List<Type> argTypes = new ArrayList<>(expr.arguments.size());
+		for (Expr a : expr.arguments) argTypes.add(visit(a));
 
-			if (recv.kind == Type.Kind.ARRAY) {
-				FnSig sig = arrayMethodSig(g.name.lexeme, recv.element);
-				if (sig == null) {
-					RainLang.error(g.name.line, "Unknown array method '" + g.name.lexeme + "'.");
-					return Type.unknown();
-				}
-				if (sig.params.size() != argTypes.size()) {
-					RainLang.error(g.name.line, "Expected " + sig.params.size() + " arguments but got " + argTypes.size() + ".");
-				} else {
-					for (int i = 0; i < sig.params.size(); i++) {
-						if (!isAssignable(argTypes.get(i), sig.params.get(i))) {
-							RainLang.error(getLine(expr.arguments.get(i)),
-								"Argument " + (i + 1) + " to '" + g.name.lexeme + "' must be " + sig.params.get(i) + " but got " + argTypes.get(i) + ".");
-						}
+		// 3) If callee is a function, check arity and parameter assignability
+		if (calleeT.kind == Type.Kind.FUNCTION) {
+			List<Type> params = calleeT.paramTypes;
+			if (params.size() != argTypes.size()) {
+				RainLang.error(getLine(expr), "Expected " + params.size() + " arguments but got " + argTypes.size() + ".");
+			} else {
+				for (int i = 0; i < params.size(); i++) {
+					if (!isAssignable(argTypes.get(i), params.get(i))) {
+						RainLang.error(getLine(expr.arguments.get(i)),
+							"Argument " + (i + 1) + " type mismatch: expected " + params.get(i) + " but got " + argTypes.get(i) + ".");
 					}
 				}
-				return sig.ret;
 			}
-
-			if (recv.equals(Type.string())) {
-				FnSig sig = stringMethodSig(g.name.lexeme);
-				if (sig == null) {
-					RainLang.error(g.name.line, "Unknown String method '" + g.name.lexeme + "'.");
-					return Type.unknown();
-				}
-				if (sig.params.size() != argTypes.size()) {
-					RainLang.error(g.name.line, "Expected " + sig.params.size() + " arguments but got " + argTypes.size() + ".");
-				} else {
-					for (int i = 0; i < sig.params.size(); i++) {
-						if (!isAssignable(argTypes.get(i), sig.params.get(i))) {
-							RainLang.error(getLine(expr.arguments.get(i)),
-								"Argument " + (i + 1) + " to '" + g.name.lexeme + "' must be " + sig.params.get(i) + " but got " + argTypes.get(i) + ".");
-						}
-					}
-				}
-				return sig.ret;
-			}
+			return calleeT.returnType;
 		}
 
-		// Fallback: dynamic/unknown callee; still visit args
-		for (Expr a : expr.arguments) visit(a);
+		// 4) Not callable → error (args already visited so side diagnostics still run)
+		RainLang.error(getLine(expr.callee), "Attempted to call a non-callable expression of type " + calleeT + ".");
 		return Type.unknown();
 	}
-
 
 	@Override
 	public Type visitGetExpr(Expr.Get expr) {

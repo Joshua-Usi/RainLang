@@ -23,7 +23,7 @@ class Builtins {
 	}
 
 	static void registerTypes(TypeEnvironment tenv) {
-		tenv.define("print", Type.function(Type.none(), List.of(Type.string())));
+		tenv.define("print", Type.function(Type.none(), List.of(Type.unknown())));
 		tenv.define("assert", Type.function(Type.none(), List.of(Type.bool())));
 	}
 }
