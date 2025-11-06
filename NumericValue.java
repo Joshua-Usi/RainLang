@@ -22,7 +22,12 @@ class NumericValue {
 	}
 
 	static String typeToSuffix(Type t, double v) {
-		String num = (v == Math.floor(v)) ? String.valueOf((long)v) : String.valueOf(v);
+		// Format to max 3 decimal places
+		String num = String.format("%.3f", v);
+		// Strip trailing zeros
+		num = num.replaceAll("0+$", "");
+		// Strip trailing decimal point
+		num = num.replaceAll("\\.$", "");
 
 		switch (t.kind) {
 			case VOLUME: return num + "L";

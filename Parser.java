@@ -166,21 +166,23 @@ class Parser {
 
 	private Stmt.TypeNode type() {
 		if (match(TokenType.NONE)) {
-			return new Stmt.TypeNode(previous(), true, false);
+			return new Stmt.TypeNode(previous(), true, 0);
 		}
 		if (!match(TokenType.IDENTIFIER)) {
 			report(peek(), "Expect type name.");
 			return null;
 		}
 		Token name = previous();
-		boolean isArray = false;
-		if (match(TokenType.LEFT_BRACKET)) {
+
+		// Support N-dimensional arrays: T[], T[][], T[][][], ...
+		int arrayDepth = 0;
+		while (match(TokenType.LEFT_BRACKET)) {
 			if (need(TokenType.RIGHT_BRACKET, "Expect ']' after '[' in array type.") == null) {
-				// Treating as an array anyway
+				// Treat as an array dimension anyway so later phases don't explode
 			}
-			isArray = true;
+			arrayDepth++;
 		}
-		return new Stmt.TypeNode(name, false, isArray);
+		return new Stmt.TypeNode(name, false, arrayDepth);
 	}
 
 	// statement → return_stmt | control_flow | block | expression_stmt | continue | break
@@ -470,9 +472,11 @@ class Parser {
 		if (!(idType || peek(i).type == TokenType.NONE)) return false;
 		i++;
 
-		// Only IDENTIFIER types can be arrays
-		if (idType && peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
-			i += 2;
+		// Only IDENTIFIER types can be arrays; consume all [] pairs
+		if (idType) {
+			while (peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
+				i += 2;
+			}
 		}
 
 		return (peek(i).type == TokenType.IDENTIFIER && peek(i + 1).type == TokenType.LEFT_PAREN);
@@ -484,12 +488,16 @@ class Parser {
 		if (!(idType || peek(i).type == TokenType.NONE)) return false;
 		i++;
 
-		if (idType && peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
-			i += 2;
+		// Only IDENTIFIER types can be arrays; consume all [] pairs
+		if (idType) {
+			while (peek(i).type == TokenType.LEFT_BRACKET && peek(i + 1).type == TokenType.RIGHT_BRACKET) {
+				i += 2;
+			}
 		}
 
 		return (peek(i).type == TokenType.IDENTIFIER && peek(i + 1).type == TokenType.EQUAL);
 	}
+	
 	private boolean match(TokenType... types) {
 		for (TokenType type : types) {
 			if (check(type)) { advance(); return true; }

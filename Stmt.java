@@ -99,18 +99,18 @@ abstract class Stmt {
 		Param(TypeNode type, Token name) { this.type = type; this.name = name; }
 	}
 
-	static class TypeNode {
+	public static final class TypeNode {
 		final Token name;
 		final boolean isNone;
-		final boolean isArray;
-		TypeNode(Token name, boolean isNone, boolean isArray) {
-			this.name = name; this.isNone = isNone; this.isArray = isArray;
-		}
-		@Override public String toString() {
-			if (isNone) return "None";
-			return name.lexeme + (isArray ? "[]" : "");
+		final int arrayDepth;
+
+		public TypeNode(Token name, boolean isNone, int arrayDepth) {
+			this.name = name;
+			this.isNone = isNone;
+			this.arrayDepth = arrayDepth;
 		}
 	}
+
 	static class Field extends Stmt {
 		final TypeNode type;
 		final Token name;

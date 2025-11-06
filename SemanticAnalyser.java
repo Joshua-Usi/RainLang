@@ -511,15 +511,19 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		String n = node.name.lexeme;
 		Type base;
 		switch (n) {
-			case "Val": base = Type.val(); break;
+			case "Val":    base = Type.val();    break;
 			case "Volume": base = Type.volume(); break;
-			case "Area": base = Type.area(); break;
-			case "Rain": base = Type.rain(); break;
+			case "Area":   base = Type.area();   break;
+			case "Rain":   base = Type.rain();   break;
 			case "String": base = Type.string(); break;
-			case "Bool": base = Type.bool(); break;
-			default: base = Type.classType(n); break;
+			case "Bool":   base = Type.bool();   break;
+			default:       base = Type.classType(n); break;
 		}
-		return node.isArray ? Type.arrayOf(base) : base;
+		// Wrap for each array dimension
+		for (int d = 0; d < node.arrayDepth; d++) {
+			base = Type.arrayOf(base);
+		}
+		return base;
 	}
 
 	private boolean isAssignable(Type from, Type to) {
