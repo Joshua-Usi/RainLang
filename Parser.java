@@ -524,7 +524,7 @@ class Parser {
 		while (!isAtEnd()) {
 			if (previous().type == TokenType.SEMICOLON) break;
 			switch (peek().type) {
-				case RIGHT_BRACE: // ← added
+				case RIGHT_BRACE:
 				case CLASS:
 				case RETURN:
 				case IF:
