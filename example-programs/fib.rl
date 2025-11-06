@@ -2,6 +2,7 @@ Val fib(Val n) {
 	if (n <= 1) {
 		return n;
 	}
+	// Naive fibonacci, very computationally inefficient, but works for proving recursion works
 	return fib(n - 1) + fib(n - 2);
 }
 

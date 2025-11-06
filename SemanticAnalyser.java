@@ -28,7 +28,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		for (Stmt s : program) visit(s);
 	}
 
-	// ---- Stmt Visitor ----
 	@Override
 	public Void visitExpressionStmt(Stmt.Expression stmt) {
 		visit(stmt.expression);
@@ -49,14 +48,12 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Void visitFunctionStmt(Stmt.Function stmt) {
-		// compute and register function type
 		Type retType = resolveTypeNode(stmt.returnType);
 		List<Type> paramTypes = new ArrayList<>(stmt.params.size());
 		for (Stmt.Param p : stmt.params) paramTypes.add(resolveTypeNode(p.type));
 		Type fnType = Type.function(retType, paramTypes);
-		env.define(stmt.name.lexeme, fnType);
+		env.addFunctionOverload(stmt.name.lexeme, fnType);
 
-		// New scope for params/body
 		env.push();
 		returnStack.push(retType);
 		for (int i = 0; i < stmt.params.size(); i++) {
@@ -67,7 +64,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		returnStack.pop();
 		env.pop();
 
-		// also record as a method if inside a class
 		if (!classStack.isEmpty()) {
 			String cname = classStack.peek().name;
 			ClassInfo ci = classes.get(cname);
@@ -81,10 +77,8 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		Type cls = Type.classType(stmt.name.lexeme);
 		env.define(stmt.name.lexeme, cls);
 
-		// register class shell so members can be recorded
 		classes.put(stmt.name.lexeme, new ClassInfo(stmt.name.lexeme));
 
-		// Class scope for fields/methods
 		classStack.push(cls);
 		env.push();
 		env.define("this", cls);
@@ -153,7 +147,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	public Void visitFieldStmt(Stmt.Field stmt) {
 		Type declared = resolveTypeNode(stmt.type);
 
-		// record field type on current class
 		if (!classStack.isEmpty()) {
 			ClassInfo ci = classes.get(classStack.peek().name);
 			if (ci != null) ci.fields.put(stmt.name.lexeme, declared);
@@ -166,14 +159,12 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 					"Cannot assign " + init + " to field '" + stmt.name.lexeme + "' of type " + declared + ".");
 			}
 		}
-		// Fields are inside class scope already
 		env.define(stmt.name.lexeme, declared);
 		return null;
 	}
 
 	@Override
 	public Void visitConstructorStmt(Stmt.Constructor stmt) {
-		// record constructor signature
 		if (!classStack.isEmpty()) {
 			String cname = classStack.peek().name;
 			ClassInfo ci = classes.get(cname);
@@ -184,7 +175,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			}
 		}
 
-		// New scope for params/body (inside class)
 		env.push();
 		for (Stmt.Param p : stmt.params) {
 			Type pt = resolveTypeNode(p.type);
@@ -195,7 +185,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		return null;
 	}
 
-	// ---- Expr Visitor ----
 	@Override
 	public Type visitBinaryExpr(Expr.Binary expr) {
 		Type l = visit(expr.left);
@@ -214,7 +203,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		if (expr.value instanceof Boolean) return Type.bool();
 		if (expr.value instanceof String) return Type.string();
 
-		// Numbers: decide by unit suffix
 		Token unit = expr.unit;
 		if (unit == null) return Type.val();
 
@@ -285,15 +273,48 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	@Override
 	public Type visitCallExpr(Expr.Call expr) {
-		// 1) Type-check the callee (works for free functions and obj.method; 
-		//    visitGetExpr already returns FUNCTION/Val/etc. for members)
+		if (expr.callee instanceof Expr.Variable v) {
+			String fname = v.name.lexeme;
+
+			List<Type> argTypes = new ArrayList<>(expr.arguments.size());
+			for (Expr a : expr.arguments) argTypes.add(visit(a));
+
+			List<Type> candidates = env.lookupFunctionOverloads(fname);
+			if (candidates != null && !candidates.isEmpty()) {
+				List<Integer> matches = new ArrayList<>();
+				for (int i = 0; i < candidates.size(); i++) {
+					Type cand = candidates.get(i);
+					if (cand.kind != Type.Kind.FUNCTION) continue;
+					List<Type> params = cand.paramTypes;
+					if (params.size() != argTypes.size()) continue;
+					boolean ok = true;
+					for (int j = 0; j < params.size(); j++) {
+						if (!isAssignable(argTypes.get(j), params.get(j))) { ok = false; break; }
+					}
+					if (ok) matches.add(i);
+				}
+				if (matches.size() == 1) {
+					int slot = matches.get(0);
+					Type chosen = candidates.get(slot);
+					CallResolution.bind(expr, fname, slot);
+					return chosen.returnType;
+				}
+				if (matches.isEmpty()) {
+					RainLang.error(getLine(expr), "No overload of '" + fname + "' matches argument types (" +
+							String.join(", ", argTypes.stream().map(Type::toString).toList()) + ").");
+					return Type.unknown();
+				}
+				RainLang.error(getLine(expr), "Ambiguous call to '" + fname + "' with argument types (" +
+						String.join(", ", argTypes.stream().map(Type::toString).toList()) + ").");
+				return Type.unknown();
+			}
+		}
+
 		Type calleeT = visit(expr.callee);
 
-		// 2) Collect argument types
 		List<Type> argTypes = new ArrayList<>(expr.arguments.size());
 		for (Expr a : expr.arguments) argTypes.add(visit(a));
 
-		// 3) If callee is a function, check arity and parameter assignability
 		if (calleeT.kind == Type.Kind.FUNCTION) {
 			List<Type> params = calleeT.paramTypes;
 			if (params.size() != argTypes.size()) {
@@ -309,7 +330,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			return calleeT.returnType;
 		}
 
-		// 4) Not callable → error (args already visited so side diagnostics still run)
 		RainLang.error(getLine(expr.callee), "Attempted to call a non-callable expression of type " + calleeT + ".");
 		return Type.unknown();
 	}
@@ -318,7 +338,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	public Type visitGetExpr(Expr.Get expr) {
 		Type recv = visit(expr.object);
 
-		// Array built-ins
 		if (recv.kind == Type.Kind.ARRAY) {
 			String m = expr.name.lexeme;
 			if ("length".equals(m)) return Type.val();
@@ -328,7 +347,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			return Type.unknown();
 		}
 
-		// String built-ins
 		if (recv.equals(Type.string())) {
 			String m = expr.name.lexeme;
 			if ("length".equals(m)) return Type.val();
@@ -338,7 +356,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			return Type.unknown();
 		}
 
-		// Class members (existing logic)
 		if (recv.kind != Type.Kind.CLASS) {
 			RainLang.error(getLine(expr.object), "Property access requires a class instance, array, or string; got " + recv + ".");
 			return Type.unknown();
@@ -442,7 +459,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		return classStack.peek();
 	}
 
-	// ---- Helpers ----
 	private Type resolveTypeNode(Stmt.TypeNode node) {
 		if (node.isNone) return Type.none();
 		String n = node.name.lexeme;
@@ -454,14 +470,14 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 			case "Rain": base = Type.rain(); break;
 			case "String": base = Type.string(); break;
 			case "Bool": base = Type.bool(); break;
-			default: base = Type.classType(n); break; // custom classes
+			default: base = Type.classType(n); break;
 		}
 		return node.isArray ? Type.arrayOf(base) : base;
 	}
 
 	private boolean isAssignable(Type from, Type to) {
 		if (to.equals(Type.unknown()) || from.equals(Type.unknown())) return true;
-		if (from.equals(Type.none())) return true; // allow None to any (nullable)
+		if (from.equals(Type.none())) return true;
 		if (to.kind == Type.Kind.ARRAY) {
 			return from.kind == Type.Kind.ARRAY && isAssignable(from.element, to.element);
 		}
@@ -482,7 +498,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	}
 
 	private int getLine(Expr node) {
-		// Best-effort line reporting for composite nodes
 		if (node instanceof Expr.Variable) return ((Expr.Variable)node).name.line;
 		if (node instanceof Expr.Literal) {
 			Expr.Literal l = (Expr.Literal)node;
@@ -503,7 +518,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 
 	private Type binaryResult(Token op, Type L, Type R) {
 		switch (op.type) {
-			// Equality and inequalities
 			case TokenType.EQUAL_EQUAL:
 			case TokenType.BANG_EQUAL:
 				return Type.bool();
@@ -516,22 +530,18 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 				}
 				return Type.bool();
 
-			// Addition
 			case TokenType.PLUS:
-				// String + (Val|Volume|Area|Rain|String) -> String
 				if (L.equals(Type.string())) {
 					if (R.equals(Type.string()) || R.isNumericDomain()) return Type.string();
 					RainLang.error(op.line, "String '+' only supports String or numeric domains on RHS; got " + R + ".");
 					return Type.string();
 				}
-				// Ensure arrays are of the same type
 				if (L.kind == Type.Kind.ARRAY && R.kind == Type.Kind.ARRAY) {
 					if (!L.element.equals(R.element)) {
 						RainLang.error(op.line, "Array '+' requires same element type; got " + L + " and " + R + ".");
 					}
 					return Type.arrayOf(L.element);
 				}
-				// Volume/Area/Rain/Val same-kind addition
 				if (L.equals(Type.volume()) && R.equals(Type.volume())) return Type.volume();
 				if (L.equals(Type.area())  && R.equals(Type.area()))  return Type.area();
 				if (L.equals(Type.rain())  && R.equals(Type.rain()))  return Type.rain();
@@ -539,7 +549,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 				RainLang.error(op.line, "Invalid operator '+' between " + L + " and " + R + ".");
 				return Type.unknown();
 
-			// Subtraction mirrors same-kind numeric domains
 			case TokenType.MINUS:
 				if (L.equals(Type.volume()) && R.equals(Type.volume())) return Type.volume();
 				if (L.equals(Type.area())  && R.equals(Type.area()))  return Type.area();
@@ -548,24 +557,17 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 				RainLang.error(op.line, "Invalid operator '-' between " + L + " and " + R + ".");
 				return Type.unknown();
 
-			// Multiplication
 			case TokenType.STAR:
-				// Val * X or X * Val -> X (X in Val, Volume, Area, Rain)
 				if (L.equals(Type.val()) && R.isNumericDomain()) return R;
 				if (R.equals(Type.val()) && L.isNumericDomain()) return L;
-				// Area * Rain / Rain * Area -> Volume
 				if ((L.equals(Type.area()) && R.equals(Type.rain())) || (L.equals(Type.rain()) && R.equals(Type.area())))
 					return Type.volume();
 				RainLang.error(op.line, "Invalid operator '*' between " + L + " and " + R + ".");
 				return Type.unknown();
 
-			// Division
 			case TokenType.SLASH:
-				// X / Val -> X
 				if (R.equals(Type.val()) && L.isNumericDomain()) return L;
-				// Volume / Rain -> Area
 				if (L.equals(Type.volume()) && R.equals(Type.rain())) return Type.area();
-				// Volume / Area -> Rain
 				if (L.equals(Type.volume()) && R.equals(Type.area())) return Type.rain();
 				RainLang.error(op.line, "Invalid operator '/' between " + L + " and " + R + ".");
 				return Type.unknown();
@@ -575,7 +577,6 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 		}
 	}
 
-	// Add helpers inside SemanticAnalyser
 	private FnSig arrayMethodSig(String name, Type elem) {
 		switch (name) {
 			case "push":     return new FnSig(Type.val(), Arrays.asList(elem));
@@ -588,12 +589,9 @@ class SemanticAnalyser implements Expr.Visitor<Type>, Stmt.Visitor<Void> {
 	}
 
 	private FnSig stringMethodSig(String name) {
-		// For later in case we ever add some more properties
 		return null;
 	}
 
-
-	// Overloads are fun
 	private Type visit(Expr e) { return e.accept(this); }
 	private Void visit(Stmt s) { return s.accept(this); }
 }

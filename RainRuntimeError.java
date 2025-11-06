@@ -1,8 +1,8 @@
 class RainRuntimeError extends RuntimeException {
-    final Token token;
+	final Token token;
 
-    RainRuntimeError(Token token, String message) {
-        super(message);
-        this.token = token;
-    }
+	RainRuntimeError(Token token, String message) {
+		super(message);
+		this.token = token;
+	}
 }

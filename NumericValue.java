@@ -22,12 +22,14 @@ class NumericValue {
 	}
 
 	static String typeToSuffix(Type t, double v) {
+		String num = (v == Math.floor(v)) ? String.valueOf((long)v) : String.valueOf(v);
+
 		switch (t.kind) {
-			case VOLUME: return v + "L";
-			case RAIN:   return v + "mm";
-			case AREA:   return v + "m2";
-			case VAL:    return String.valueOf(v);
-			default:     return String.valueOf(v);
+			case VOLUME: return num + "L";
+			case RAIN:   return num + "mm";
+			case AREA:   return num + "m2";
+			case VAL:    return num;
+			default:     return num;
 		}
 	}
 }

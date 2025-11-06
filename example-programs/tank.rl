@@ -16,6 +16,7 @@ class Body {
 	Volume sinks;
 	Body[] inflows;
 	Body[] outflows;
+	Volume[] outflow_rates;
 
 	Body(Area area, Volume initial_volume) {
 		this.area = area;
@@ -89,7 +90,7 @@ None connect(Body start, Body outflow, Volume max_flow_rate) {
 }
 
 None connect(Body start, Body outflow) {
-	connect(start, outflow, -1.0);
+	connect(start, outflow, -1.0L);
 }
 
 // Disconnect 2 bodies
@@ -205,5 +206,5 @@ print("Area: " + a.area);
 print("Volume: " + a.volume);
 
 print("B details: ");
-print("Area: " + B.area);
-print("Volume: " + B.volume);
+print("Area: " + b.area);
+print("Volume: " + b.volume);

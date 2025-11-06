@@ -85,11 +85,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		Object leftRaw = evaluate(expr.left);
 		Object rightRaw = evaluate(expr.right);
 
-		// Equality and string concat are handled separately:
 		if (expr.operator.type == TokenType.EQUAL_EQUAL) return isEqual(leftRaw, rightRaw);
 		if (expr.operator.type == TokenType.BANG_EQUAL) return !isEqual(leftRaw, rightRaw);
 
-		// Array concatenation
 		if (expr.operator.type == TokenType.PLUS && leftRaw instanceof List && rightRaw instanceof List) {
 			List<?> L = (List<?>) leftRaw;
 			List<?> R = (List<?>) rightRaw;
@@ -99,12 +97,10 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			return out;
 		}
 
-		// String concatenation
 		if (expr.operator.type == TokenType.PLUS && leftRaw instanceof String) {
 			return (String)leftRaw + stringify(rightRaw);
 		}
 
-		// Numeric domain operations
 		NumericValue left = asNum(leftRaw, expr.operator);
 		NumericValue right = asNum(rightRaw, expr.operator);
 
@@ -112,7 +108,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		Type R = right.type;
 
 		switch (expr.operator.type) {
-			// Inequalities
 			case GREATER:
 			case GREATER_EQUAL:
 			case LESS:
@@ -123,25 +118,19 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 					case LESS:          return left.value <  right.value;
 					case LESS_EQUAL:    return left.value <= right.value;
 				}
-				// (unreachable)
 				break;
 
-			// Addition
 			case PLUS:
 				return new NumericValue(left.type, left.value + right.value);
 
-			// Subtraction
 			case MINUS:
 				return new NumericValue(left.type, left.value - right.value);
 
-			// Multiplication
 			case STAR:
-				// Val scaling
 				if (L.equals(Type.val()) && R.isNumericDomain())
 					return new NumericValue(R, left.value * right.value);
 				if (R.equals(Type.val()) && L.isNumericDomain())
 					return new NumericValue(L, left.value * right.value);
-				// Area * Rain = Volume
 				if (L.equals(Type.area()) && R.equals(Type.rain()))
 					return new NumericValue(Type.volume(), left.value * right.value);
 				if (L.equals(Type.rain()) && R.equals(Type.area()))
@@ -149,22 +138,17 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
 				throw new RainRuntimeError(expr.operator, "Invalid * between " + L + " and " + R + ".");
 
-			// Division
 			case SLASH:
 				if (right.value == 0)
 					throw new RainRuntimeError(expr.operator, "Division by zero.");
-				// X / Val = X
 				if (R.equals(Type.val()) && L.isNumericDomain())
 					return new NumericValue(L, left.value / right.value);
-				// Volume / Rain = Area
 				if (L.equals(Type.volume()) && R.equals(Type.rain()))
 					return new NumericValue(Type.area(), left.value / right.value);
-				// Volume / Area = Rain
 				if (L.equals(Type.volume()) && R.equals(Type.area()))
 					return new NumericValue(Type.rain(), left.value / right.value);
 				throw new RainRuntimeError(expr.operator, "Invalid / between " + L + " and " + R + ".");
 		}
-		// unreachable
 		return null;
 	}
 	@Override
@@ -219,7 +203,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			}
 		}
 
-		// Unreachable
 		return null;
 	}
 	@Override
@@ -241,7 +224,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		} else if (expr.operator.type == TokenType.AND_AND) {
 			if (!isTruthy(left)) return left;
 		}
-		// Only evaluate right side when needed
 		return evaluate(expr.right);
 	}
 
@@ -254,6 +236,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			arguments.add(evaluate(arg));
 		}
 
+		if (callee instanceof OverloadSet set) {
+			CallResolution.Resolved r = CallResolution.get(expr);
+			if (r == null)
+				throw new RainRuntimeError(expr.paren, "Internal error: unresolved overloaded call.");
+			if (r.slot < 0 || r.slot >= set.size())
+				throw new RainRuntimeError(expr.paren, "Internal error: overload slot out of range.");
+			RainFunction fn = set.get(r.slot);
+			return fn.call(this, expr.paren, arguments);
+		}
+
 		if (!(callee instanceof Callable)) {
 			throw new RainRuntimeError(expr.paren, "Can only call functions and classes.");
 		}
@@ -264,7 +256,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			throw new RainRuntimeError(expr.paren, "Expected " + function.arity() + " arguments but got " + arguments.size() + ".");
 		}
 
-		// Finally, perform the call
 		return function.call(this, expr.paren, arguments);
 	}
 	@SuppressWarnings("unchecked")
@@ -272,12 +263,10 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	public Object visitGetExpr(Expr.Get expr) {
 		Object object = evaluate(expr.object);
 
-		// Class instances
 		if (object instanceof RainInstance inst) {
 			return inst.get(expr.name);
 		}
 
-		// Arrays (java.util.List)
 		if (object instanceof List<?> base) {
 			String m = expr.name.lexeme;
 			switch (m) {
@@ -310,28 +299,28 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 						@Override public int arity() { return 0; }
 						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
 							((List<Object>) base).clear();
-							return null; // None
+							return null;
 						}
 						@Override public String toString() { return "<native Array.clear>"; }
 					};
 
 				case "insert":
 					return new Callable() {
-						@Override public int arity() { return 2; } // (index: Val, value: Elem)
+						@Override public int arity() { return 2; }
 						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
 							int i = interpreter.asIndex(args.get(0), expr.name);
 							List<Object> l = (List<Object>) base;
 							if (i < 0 || i > l.size())
 								throw new RainRuntimeError(expr.name, "Index " + i + " out of bounds for insert length " + l.size() + ".");
 							l.add(i, args.get(1));
-							return null; // None
+							return null;
 						}
 						@Override public String toString() { return "<native Array.insert>"; }
 					};
 
 				case "removeAt":
 					return new Callable() {
-						@Override public int arity() { return 1; } // (index: Val)
+						@Override public int arity() { return 1; }
 						@Override public Object call(Interpreter interpreter, Token paren, List<Object> args) {
 							int i = interpreter.asIndex(args.get(0), expr.name);
 							List<Object> l = (List<Object>) base;
@@ -345,7 +334,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			throw new RainRuntimeError(expr.name, "Unknown array member '" + m + "'.");
 		}
 
-		// Strings
 		if (object instanceof String s) {
 			String m = expr.name.lexeme;
 			switch (m) {
@@ -409,7 +397,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		if (replMode && value != null) {
 			System.out.println(stringify(value));
 		}
-		// Unreachable
 		return null;
 	}
 	@Override
@@ -417,18 +404,30 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		Object value = null;
 		if (stmt.initializer != null) value = evaluate(stmt.initializer);
 		env.define(stmt.name.lexeme, value);
-		// Unreachable
 		return null;
 	}
 	@Override
 	public Void visitFunctionStmt(Stmt.Function stmt) {
 		RainFunction function = new RainFunction(stmt, env);
-		env.define(stmt.name.lexeme, function);
+
+		if (env.hasLocal(stmt.name.lexeme)) {
+			Object existing = env.getLocal(stmt.name.lexeme);
+			if (existing instanceof OverloadSet set) {
+				set.add(function);
+			} else {
+				OverloadSet set = new OverloadSet();
+				set.add(function);
+				env.define(stmt.name.lexeme, set);
+			}
+		} else {
+			OverloadSet set = new OverloadSet();
+			set.add(function);
+			env.define(stmt.name.lexeme, set);
+		}
 		return null;
 	}
 	@Override
 	public Void visitClassStmt(Stmt.ClassStmt stmt) {
-		// Reserve the name first so methods can refer to the class
 		env.define(stmt.name.lexeme, null);
 
 		Map<String, RainFunction> methods = new HashMap<>();
@@ -436,7 +435,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		List<Stmt> fieldInits = new ArrayList<>();
 		Stmt.Constructor ctor = null;
 
-		// Synthetic 'this' token for fields
 		Token thisTok = new Token(TokenType.THIS, "this", null, stmt.name.line, -1);
 
 		for (Stmt m : stmt.members) {
@@ -445,7 +443,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 			} else if (m instanceof Stmt.Field f) {
 				fieldNames.add(f.name.lexeme);
 				if (f.initializer != null) {
-					// Add this
 					Expr set = new Expr.Set(new Expr.This(thisTok), f.name, f.initializer);
 					fieldInits.add(new Stmt.Expression(set));
 				}
@@ -455,7 +452,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		}
 
 		RainClass k = new RainClass(stmt.name.lexeme, env, methods, fieldNames, fieldInits, ctor);
-		// Replace the placeholder with the actual class object
 		env.assign(stmt.name, k);
 		return null;
 	}
@@ -505,7 +501,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	public Void visitReturnStmt(Stmt.Return stmt) {
 		Object value = null;
 		if (stmt.value != null) value = evaluate(stmt.value);
-		// Actually crazy how returning a value is just throwing an Error
 		throw new RainReturn(value);
 	}
 
@@ -523,7 +518,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		}
 		return (NumericValue)v;
 	}
-	// What da heck?
 	@SuppressWarnings("unchecked")
 	private List<Object> asArray(Object v, Token at) {
 		if (!(v instanceof List)) {

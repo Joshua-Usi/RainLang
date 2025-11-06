@@ -9,12 +9,7 @@ class RainClass implements Callable {
 	// Can be null
 	final Stmt.Constructor ctor;
 
-	RainClass(String name,
-	          Environment closure,
-	          Map<String, RainFunction> methods,
-	          List<String> fieldNames,
-	          List<Stmt> fieldInits,
-	          Stmt.Constructor ctor) {
+	RainClass(String name, Environment closure, Map<String, RainFunction> methods, List<String> fieldNames, List<Stmt> fieldInits, Stmt.Constructor ctor) {
 		this.name = name;
 		this.closure = closure;
 		this.methods = methods;
