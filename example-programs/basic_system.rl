@@ -1,28 +1,47 @@
-// Define 5 bodies, one filled, the rest empty
-Body a = Body("Mountain Spring", 10m2, 100L);
-Body b = Body("West River", 10m2, 0L);
-Body c = Body("North Creek", 10m2, 0L);
-Body d = Body("East Equestiary", 10m2, 0L);
-Body e = Body("Ocean Outlet", 10m2, 0L);
+// Define 5 bodies with reasonable starting amounts
+Body a = Body("Southern Spring", 10m2, 10L);
+Body b = Body("West River", 10m2, 10L);
+Body c = Body("North Dam", 10m2, 10L);
+// Keep these empty so it's easier to see how they fill up
+Body d = Body("East Estuary", 10m2, 0L);
+Body e = Body("Ocean", 10m2, 0L);
 
 // Connect them with unlimited flow rate
 connect(a, b);
 connect(b, c);
-connect(c, d);
+// Maximum capacity of spill way
+connect(c, d, 5L);
 connect(d, e);
 
-// Define that it'll rain 10mm on c over 4 days
-// 4mm on day 1, 3mm on day 2, 2mm on day 3, 1mm on day 4, simulates runoff over time
-// rain(c, 10mm, [ 40%, 30%, 20%, 10% ]);
+// Make C a dam
+Dam dam_c = Dam(c);
+dam_c.close();
 
-// 10L of water enters a each day
+// 10L of water enters the Southern Spring each day, from an unmodelled external source
 // source(a, 10L);
-// 10L of water leaves the system from e each day
-sink(e, 10L);
+// Water evacuates to Ocean, it models water leaving the system
+sink(e, 1TL);
 
-// Simulate for this many days
+// How many days to simulate
 Val days_to_simulate = 10;
 
-simulate(days_to_simulate);
+// Define an event for raining 10mm over the Southern Spring over 4 days
+// Kernel spreads rain over several days
+rain(a, 10mm, [ 40%, 30%, 20%, 10% ]);
 
-hydrology_report();
+None run_simulation(Val days) {
+	// Manually control dam behaviour
+	for (Val i = 0; i < days; i = i + 1) {
+		// Once the dam reaches 25L, open the flood gates!
+		if (c.volume > 25L && !dam_c.is_open) {
+			print("Dam overspill on day " + __DAY);
+			dam_c.open();
+		}
+		simulate();
+	}
+}
+
+run_simulation(days_to_simulate);
+
+// No need to report the ocean, it'll just read 0
+hydrology_report([ a, b, c, d ]);

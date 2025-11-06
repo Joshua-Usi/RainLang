@@ -358,6 +358,12 @@ None rain(Body body, Rain amount, Val[] kernel) {
 	__RAIN_EVENTS.push(__RAIN_EVENT(body, amount, kernel));
 }
 
+None rain(Body[] bodies, Rain amount, Val[] kernel) {
+	for (Val i = 0; i < bodies.length; i = i + 1) {
+		rain(bodies[i], amount, kernel);
+	}
+}
+
 None rain(Body body, Rain amount) {
 	rain(body, amount, [1]);
 }
@@ -526,4 +532,37 @@ None hydrology_report(Body body) {
 // Print over every body. Note it can be heavy because it may print an extreme amount of bodies
 None hydrology_report() {
 	hydrology_report(__BODY_REGISTRY);
+}
+
+class Dam {
+	Body body;
+	Body[] saved_outflows;
+	Volume[] saved_rates;
+	Bool is_open;
+
+	Dam(Body body) {
+		this.body = body;
+
+		// Snapshot current connections
+		this.saved_outflows = [];
+		this.saved_rates = [];
+		for (Val i = 0; i < body.outflows.length; i = i + 1) {
+			this.saved_outflows.push(body.outflows[i]);
+			this.saved_rates.push(body.outflow_rates[i]);
+		}
+	}
+
+	None open() {
+		this.is_open = true;
+		for (Val i = 0; i < this.saved_outflows.length; i = i + 1) {
+			connect(this.body, this.saved_outflows[i], this.saved_rates[i]);
+		}
+	}
+
+	None close() {
+		this.is_open = false;
+		for (Val i = this.saved_outflows.length - 1; i >= 0; i = i - 1) {
+			disconnect(this.body, this.saved_outflows[i]);
+		}
+	}
 }

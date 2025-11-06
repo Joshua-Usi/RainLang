@@ -47,7 +47,6 @@ Val mainIndex(Val streetIdx) {
     return floor(streetIdx / STREETS_PER_MAIN);
 }
 
-// ---- Build topology ---------------------------------------
 Void buildNetwork() {
     // Create all nodes
     for (Val i = 0; i < HOUSE_COUNT; i = i + 1) {
@@ -81,7 +80,6 @@ Void buildNetwork() {
     }
 }
 
-// ---- Inflows ----------------------------------------------
 Void addHouseSources() {
     for (Val i = 0; i < HOUSE_COUNT; i = i + 1) {
         // External inflow boundary: daily household discharge
@@ -101,7 +99,6 @@ Void addStreetRainIfEnabled() {
     }
 }
 
-// ---- Simulation driver ------------------------------------
 Void runScenario() {
     buildNetwork();
     addHouseSources();
@@ -121,7 +118,7 @@ Void runScenario() {
         }
         simulate(1); // advance one day per loop
     }
+    hydrology_report();
 }
 
-// ---- Kick off ---------------------------------------------
 runScenario();
