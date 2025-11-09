@@ -1,0 +1,44 @@
+// Define 5 bodies with reasonable starting amounts
+Body a = Body("Southern Spring", 5km2, 10ML);
+Body b = Body("West River", 5km2, 10ML);
+Body c = Body("North Dam", 5km2, 10ML);
+// Keep these empty so it's easier to see how they fill up
+Body d = Body("East Estuary", 5km2, 0L);
+Body e = Body("Ocean", 5km2, 0L);
+
+// Connect them with unlimited flow rate
+connect(a, b);
+connect(b, c);
+// Maximum capacity of spill way
+connect(c, d, 15ML);
+connect(d, e);
+
+// Make C a dam
+Dam dam_c = Dam(c);
+dam_c.close();
+
+// 10L of water enters the Southern Spring each day, from an unmodelled external source
+// source(a, 10ML);
+// Water evacuates to Ocean, it models water leaving the system
+sink(e, 1TL);
+
+// How many days to simulate
+Val days_to_simulate = 10;
+
+// Define an event for raining 10mm over the Southern Spring over 4 days
+// Kernel spreads rain over several days
+rain(a, 10mm, [ 40%, 30%, 20%, 10% ]);
+
+None run_simulation(Val days) {
+	// Manually control dam behaviour
+	for (Val i = 0; i < days; i = i + 1) {
+		// Once the dam reaches 25ML, open the flood gates!
+		if (c.volume > 25ML && !dam_c.is_open) {
+			print("Dam overspill on day " + __DAY);
+			dam_c.open();
+		}
+		simulate();
+	}
+}
+
+run_simulation(days_to_simulate);

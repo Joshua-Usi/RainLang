@@ -1,0 +1,60 @@
+Body lower_molonglo   = Body("Lower Molonglo",     45km2, 80ML);
+Body central_molonglo = Body("Central Molonglo",   35km2, 50ML);
+Body upper_molonglo   = Body("Upper Molonglo",     30km2, 30ML);
+Body jerrabomberra    = Body("Jerrabomberra",      25km2, 25ML);
+Body googong          = Body("Googong",            40km2, 10ML);
+Body ocean_outlet     = Body("Murrumbidgee Outlet", 100km2, 0ML);
+
+connect(upper_molonglo, central_molonglo);
+connect(central_molonglo, lower_molonglo, 120ML);
+connect(jerrabomberra, central_molonglo, 40ML);
+connect(googong, jerrabomberra, 80ML);
+// outlet to Murrumbidgee
+connect(lower_molonglo, ocean_outlet);
+
+Dam dam_upper   = Dam(upper_molonglo);
+Dam dam_googong = Dam(googong);
+
+// Initially keep dams closed to simulate water buildup
+dam_upper.close();
+dam_googong.close();
+
+// External inflows to maintain baseline flow, this comes from unmodelled external systems
+source(upper_molonglo, 5ML);
+source(googong, 2ML);
+
+// Sink to ocean, we don't care about ocean, hence why we drain it
+sink(ocean_outlet, 1TL);
+
+rain(upper_molonglo,   40mm, [40%, 35%, 15%, 10%]);
+rain(central_molonglo, 32mm, [5%, 10%, 15%, 20%, 20%, 15%, 10%, 5%]);
+rain(jerrabomberra,    20mm, [50%, 30%, 15%, 5%]);
+rain(googong,          28mm, [5%, 8%, 10%, 12%, 15%, 15%, 10%, 8%, 6%, 5%, 3%, 2%, 1%, 0%]);
+rain(lower_molonglo,   18mm, [10%, 15%, 25%, 25%, 15%, 10%]);
+rain(ocean_outlet,     10mm, [30%, 40%, 20%, 10%]);
+
+
+// Total simulation period
+Val sim_days = 28;
+
+// Manual dam control logic for flood and capacity management
+None run_simulation(Val days) {
+	for (Val i = 0; i < days; i = i + 1) {
+
+		// Upper Molonglo dam opens if volume exceeds 800ML
+		if (upper_molonglo.volume > 800ML && !dam_upper.is_open) {
+			print("Upper Molonglo spillway activated on day " + __DAY);
+			dam_upper.open();
+		}
+
+		// Googong dam opens if volume exceeds 1.05GL
+		if (googong.volume > 1.05GL && !dam_googong.is_open) {
+			print("Googong dam releasing flow on day " + __DAY);
+			dam_googong.open();
+		}
+
+		simulate();
+	}
+}
+
+run_simulation(sim_days);

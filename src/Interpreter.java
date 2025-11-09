@@ -56,6 +56,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	private String stringify(Object value) {
 		if (value == null) return "none";
 
+		// Pretty-print typed numerics
+		if (value instanceof NumericValue) {
+			return formatNumeric((NumericValue) value);
+		}
+
 		// Clean up .0 for whole numbers
 		if (value instanceof Double) {
 			String text = value.toString();
@@ -79,6 +84,66 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 		if (value instanceof RainClass)    return value.toString();
 
 		return value.toString();
+	}
+	private String formatNumeric(NumericValue n) {
+		Type t = n.type;
+		double v = n.value;
+		double av = Math.abs(v);
+		double scaled = v;
+		String unit;
+
+		if (t.equals(Type.volume())) {
+			// Largest unit not exceeding TL
+			final String[] units = {"TL", "GL", "ML", "kL", "L"};
+			final double[] divisors = {1_000_000_000_000.0, 1_000_000_000.0, 1_000_000.0, 1_000.0, 1.0};
+
+			for (int i = 0; i < units.length; i++) {
+				if (av >= divisors[i] || i == units.length - 1) {
+					scaled = v / divisors[i];
+					unit = units[i];
+					return formatNumber(scaled) + unit;
+				}
+			}
+			// Unreachable
+		}
+
+		if (t.equals(Type.area())) {
+			if (av >= 1_000_000.0) {
+				scaled = v / 1_000_000.0;
+				unit = "km2";
+			} else {
+				unit = "m2";
+			}
+			return formatNumber(scaled) + unit;
+		}
+
+		if (t.equals(Type.rain())) {
+			// Stored as mm already
+			return formatNumber(v) + "mm";
+		}
+
+		// Plain value
+		if (t.equals(Type.val())) {
+			return formatNumber(v);
+		}
+
+		// Fallback: default to underlying toString
+		return n.toString();
+	}
+	private String formatNumber(double x) {
+		if (Double.isNaN(x)) return "nan";
+		if (Double.isInfinite(x)) return x > 0 ? "inf" : "-inf";
+		if (Math.abs(x) < 1e-12) x = 0.0;
+
+		String s = String.format(Locale.ROOT, "%.3f", x);
+		int dot = s.indexOf('.');
+		if (dot >= 0) {
+			int end = s.length();
+			while (end > dot && s.charAt(end - 1) == '0') end--;
+			if (end > dot && s.charAt(end - 1) == '.') end--;
+			s = s.substring(0, end);
+		}
+		return s;
 	}
 	@Override
 	public Object visitBinaryExpr(Expr.Binary expr) {

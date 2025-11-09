@@ -26,16 +26,24 @@ public class RainLang {
 		}
 	}
 
-	private static void runFile(String path) throws IOException {
+	private static void runFile(String path) {
 		ensureStdlibLoaded();
 		if (errors > 0) System.exit(ERR_SOURCE_CODE_ERROR);
 
-		String source = new String(Files.readAllBytes(Paths.get(path)), Charset.defaultCharset());
-		run(source);
+		try {
+			String source = new String(Files.readAllBytes(Paths.get(path)), Charset.defaultCharset());
+			run(source);
+			run("hydrology_report_implicit();");
 
-		run("hydrology_report_implicit();");
-
-		if (errors > 0) System.exit(ERR_SOURCE_CODE_ERROR);
+			if (errors > 0) System.exit(ERR_SOURCE_CODE_ERROR);
+		} catch (NoSuchFileException e) {
+			System.err.println("Error: File not found - " + path);
+			System.exit(ERR_INVALID_USAGE);
+		} catch (IOException e) {
+			System.err.println("Error: Failed to read file - " + path);
+			System.err.println("Reason: " + e.getMessage());
+			System.exit(ERR_SOURCE_CODE_ERROR);
+		}
 	}
 
 	// REPL style running of code
