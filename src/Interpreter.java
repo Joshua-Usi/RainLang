@@ -395,7 +395,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 	public Void visitExpressionStmt(Stmt.Expression stmt) {
 		Object value = evaluate(stmt.expression);
 		if (replMode && value != null) {
-			System.out.println(stringify(value));
+			// System.out.println(stringify(value));
 		}
 		return null;
 	}

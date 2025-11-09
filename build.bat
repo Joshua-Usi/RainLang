@@ -1,6 +1,8 @@
 @echo off
 call clean.bat
-echo Generating AST file
-ast_builder.py
+rem echo Generating AST file
+rem src\ast_builder.py
+echo Adding standard library
+copy "./standard_lib.txt" "./out"
 echo Compiling solution
-javac *.java
+javac -d build src\*.java

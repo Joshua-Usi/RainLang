@@ -51,11 +51,11 @@ public class RainLang {
 			String line = reader.readLine();
 			if (line == null) continue;
 			if (line.length() == 0) continue;
+			if (line.contains("exit")) break;
 			char last = line.charAt(line.length() - 1);
 			if (last != ';' && last != '}') {
 				line = line + ";";
 			}
-			if (line.equals("exit")) break;
 			run(line);
 			// Errors shouldn't kill REPL sessions
 			errors = 0;

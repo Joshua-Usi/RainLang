@@ -10,7 +10,7 @@ Body e = Body("Ocean", 10m2, 0L);
 connect(a, b);
 connect(b, c);
 // Maximum capacity of spill way
-connect(c, d, 5L);
+connect(c, d, 15L);
 connect(d, e);
 
 // Make C a dam
