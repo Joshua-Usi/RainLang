@@ -370,6 +370,20 @@ None rain(Body body, Rain amount) {
 	rain(body, amount, [1]);
 }
 
+None rain(Body[] bodies, Rain amount) {
+	rain(bodies, amount, [1]);
+}
+
+None rain_all(Rain amount, Val[] kernel) {
+	for (Val i = 0; i < __BODY_REGISTRY.length; i = i + 1) {
+		rain(__BODY_REGISTRY[i], amount, kernel);
+	}
+}
+
+None rain_all(Rain amount) {
+	rain_all(amount, [1]);
+}
+
 None simulate(Val days) {
 	if (__DAY == 0) {
 		__snapshot_history();
