@@ -4,6 +4,8 @@ Body[] __BODY_REGISTRY = [];
 __RAIN_EVENT[] __RAIN_EVENTS = [];
 // Internal simulation day counter (day 0 = pre-sim snapshot)
 Val __DAY = 0;
+// Implicit calls
+Bool __HYDROLOGY_REPORT_CALLED = false;
 
 class Body {
 	String label;
@@ -423,6 +425,7 @@ String rpad(String s, Val width) {
 
 // Prints a nice hydrology report on a set of bodies
 None hydrology_report(Body[] bodies) {
+	__HYDROLOGY_REPORT_CALLED = true;	
 	// Determine max days we have in history for any selected body
 	Val max_days = 0;
 	for (Val i = 0; i < bodies.length; i = i + 1) {
@@ -532,6 +535,13 @@ None hydrology_report(Body body) {
 // Print over every body. Note it can be heavy because it may print an extreme amount of bodies
 None hydrology_report() {
 	hydrology_report(__BODY_REGISTRY);
+}
+
+// Implicit print if never run, only works once (or nonce!)
+None hydrology_report_implicit() {
+	if (!__HYDROLOGY_REPORT_CALLED) {
+		hydrology_report();
+	}
 }
 
 class Dam {

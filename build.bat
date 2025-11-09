@@ -3,6 +3,6 @@ call clean.bat
 rem echo Generating AST file
 rem src\ast_builder.py
 echo Adding standard library
-copy "./standard_lib.txt" "./out"
+copy /Y ".\standard_lib.txt" ".\build\"
 echo Compiling solution
 javac -d build src\*.java

@@ -42,6 +42,3 @@ None run_simulation(Val days) {
 }
 
 run_simulation(days_to_simulate);
-
-// No need to report the ocean, it'll just read 0
-hydrology_report([ a, b, c, d ]);

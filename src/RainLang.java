@@ -33,6 +33,8 @@ public class RainLang {
 		String source = new String(Files.readAllBytes(Paths.get(path)), Charset.defaultCharset());
 		run(source);
 
+		run("hydrology_report_implicit();");
+
 		if (errors > 0) System.exit(ERR_SOURCE_CODE_ERROR);
 	}
 
